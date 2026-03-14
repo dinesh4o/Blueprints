@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx } from 'clsx';
+import { ModeToggle } from '@/components/mode-toggle';
 
 export default function SearchPage() {
   const [query, setQuery] = useState('');
@@ -194,6 +195,7 @@ export default function SearchPage() {
           )}
         </motion.div>
       </div>
+      <ModeToggle variant="full" />
     </motion.div>
   );
 }

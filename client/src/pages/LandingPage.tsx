@@ -3,14 +3,21 @@
   import { Search, Activity, FileText, Sparkles, BrainCircuit, Send } from 'lucide-react';
   import { Button } from '@/components/ui/button';
   import { motion, AnimatePresence } from 'framer-motion';
+  import { useAuth } from '@/context/AuthContext';
+  import { ModeToggle } from '@/components/mode-toggle';
 
   export default function LandingPage() {
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [isNavigating, setIsNavigating] = useState(false);
 
     const glassStyle = "bg-background/40 backdrop-blur-xl border border-white/20 shadow-[0_8px_32px_0_rgba(31,38,135,0.37)]";
 
     const handleStartAnalysis = () => {
+      if (!user) {
+        navigate('/login');
+        return;
+      }
       setIsNavigating(true);
       setTimeout(() => {
         navigate('/search');
@@ -145,6 +152,7 @@
             </Button>
           </motion.div>
         </div>
+        <ModeToggle variant="basic" />
       </div>
     );
   }
