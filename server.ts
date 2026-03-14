@@ -1,8 +1,17 @@
+// Load environment variables first
+import 'dotenv/config';
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import crypto from 'crypto';
+import session from 'express-session';
+import MongoStore from 'connect-mongo';
+import cookieParser from 'cookie-parser';
+import cors from 'cors';
 import { runPipeline as runLangGraphPipeline } from './src/lib/agents/workflow';
+import { connectDB } from './src/config/database';
+import passportConfig from './src/config/passport';
+import authRoutes from './src/routes/auth';
 
 // --- Market Size Lookup ---
 const MARKET_SIZES: Record<string, { usd_billion: number; growth_pct: number }> = {
@@ -90,10 +99,46 @@ function buildRepurposingCandidates(clinicalData: any[]) {
 }
 
 async function startServer() {
+  // Connect to MongoDB
+  await connectDB();
+
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  // CORS configuration
+  app.use(cors({
+    origin: process.env.CLIENT_URL || 'http://localhost:3000',
+    credentials: true,
+  }));
+
+  app.use(express.json({ limit: '10mb' }));
+  app.use(cookieParser());
+
+  // Session configuration with MongoDB store
+  app.use(
+    session({
+      secret: process.env.SESSION_SECRET || 'your-super-secret-session-key',
+      resave: false,
+      saveUninitialized: false,
+      store: MongoStore.create({
+        mongoUrl: process.env.MONGODB_URI || 'mongodb://localhost:27017/Blueprints26DB',
+        touchAfter: 24 * 3600, // Lazy session update (in seconds)
+      }),
+      cookie: {
+        secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+        httpOnly: true, // Prevents client-side JS from reading the cookie
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      },
+    })
+  );
+
+  // Initialize Passport
+  app.use(passportConfig.initialize());
+  app.use(passportConfig.session());
+
+  // Authentication routes
+  app.use('/api/auth', authRoutes);
 
   // In-memory store for jobs and reports (simulating MongoDB)
   const jobs = new Map<string, any>();

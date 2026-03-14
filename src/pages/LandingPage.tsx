@@ -3,14 +3,22 @@
   import { Search, Activity, FileText, Sparkles, BrainCircuit, Send } from 'lucide-react';
   import { Button } from '@/components/ui/button';
   import { motion, AnimatePresence } from 'framer-motion';
+  import { useAuth } from '../contexts/AuthContext';
 
   export default function LandingPage() {
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [isNavigating, setIsNavigating] = useState(false);
 
     const glassStyle = "bg-background/40 backdrop-blur-xl border border-white/20 shadow-[0_8px_32px_0_rgba(31,38,135,0.37)]";
 
     const handleStartAnalysis = () => {
+      if (!user) {
+        // Not logged in → redirect to login
+        navigate('/login');
+        return;
+      }
+      // Logged in → animate and go to search
       setIsNavigating(true);
       setTimeout(() => {
         navigate('/search');
