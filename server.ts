@@ -221,6 +221,51 @@ async function startServer() {
     res.json(report);
   });
 
+  // ─── Ephemeral RAG API Proxy ─────────────────────────────────────────────
+  
+  app.post('/api/rag/init/:id', async (req, res) => {
+    const reportId = req.params.id;
+    const report = reports.get(reportId);
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found' });
+    }
+    try {
+      const response = await fetch('http://localhost:8005/api/rag/init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          report_id: reportId,
+          report_data: report
+        })
+      });
+      const data = await response.json();
+      res.json(data);
+    } catch (err: any) {
+      console.error("RAG init error:", err.message);
+      res.status(500).json({ error: 'Failed to init RAG' });
+    }
+  });
+
+  app.post('/api/rag/chat/:id', async (req, res) => {
+    const reportId = req.params.id;
+    const { message } = req.body;
+    try {
+      const response = await fetch('http://localhost:8005/api/rag/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          report_id: reportId,
+          message: message
+        })
+      });
+      const data = await response.json();
+      res.json(data);
+    } catch (err: any) {
+      console.error("RAG chat error:", err.message);
+      res.status(500).json({ error: 'Failed to complete chat' });
+    }
+  });
+
   // Real API Pipeline powered by LangGraph
   async function runPipeline(jobId: string, molecule: string) {
     const updateStep = (index: number, status: string, log?: string, dataCount?: number) => {
