@@ -26,24 +26,24 @@ export default function LandingPage() {
 
   // Floating Glass Cards settling into place (Scattered -> Grid)
   // Card 1: Top Left
-  const c1X = useTransform(scrollYProgress, [0, 0.4], ["-30vw", "0vw"]);
-  const c1Y = useTransform(scrollYProgress, [0, 0.4], ["15vh", "0vh"]);
-  const c1R = useTransform(scrollYProgress, [0, 0.4], [-25, 0]);
+  const c1X = useTransform(scrollYProgress, [0, 0.4], ["-20vw", "0vw"]);
+  const c1Y = useTransform(scrollYProgress, [0, 0.4], ["-5vh", "0vh"]);
+  const c1R = useTransform(scrollYProgress, [0, 0.4], [-15, 0]);
 
   // Card 2: Top Right
-  const c2X = useTransform(scrollYProgress, [0, 0.4], ["30vw", "0vw"]);
-  const c2Y = useTransform(scrollYProgress, [0, 0.4], ["35vh", "0vh"]);
+  const c2X = useTransform(scrollYProgress, [0, 0.4], ["20vw", "0vw"]);
+  const c2Y = useTransform(scrollYProgress, [0, 0.4], ["-5vh", "0vh"]);
   const c2R = useTransform(scrollYProgress, [0, 0.4], [15, 0]);
 
   // Card 3: Bottom Left
   const c3X = useTransform(scrollYProgress, [0, 0.4], ["-20vw", "0vw"]);
-  const c3Y = useTransform(scrollYProgress, [0, 0.4], ["45vh", "0vh"]);
-  const c3R = useTransform(scrollYProgress, [0, 0.4], [20, 0]);
+  const c3Y = useTransform(scrollYProgress, [0, 0.4], ["15vh", "0vh"]);
+  const c3R = useTransform(scrollYProgress, [0, 0.4], [-5, 0]);
 
   // Card 4: Bottom Right
-  const c4X = useTransform(scrollYProgress, [0, 0.4], ["35vw", "0vw"]);
-  const c4Y = useTransform(scrollYProgress, [0, 0.4], ["10vh", "0vh"]);
-  const c4R = useTransform(scrollYProgress, [0, 0.4], [-15, 0]);
+  const c4X = useTransform(scrollYProgress, [0, 0.4], ["20vw", "0vw"]);
+  const c4Y = useTransform(scrollYProgress, [0, 0.4], ["15vh", "0vh"]);
+  const c4R = useTransform(scrollYProgress, [0, 0.4], [5, 0]);
 
   const handleStartAnalysis = () => {
     if (!user) {
@@ -57,7 +57,7 @@ export default function LandingPage() {
   };
 
   return (
-    <div ref={containerRef} className="relative h-[250vh] bg-[#f8fafc] dark:bg-[#000000] overflow-x-hidden font-sans selection:bg-zinc-800">
+    <div ref={containerRef} className="relative h-[250vh] bg-[#f8fafc] dark:bg-[#000000] overflow-clip font-sans selection:bg-zinc-800">
       
       {/* Navigation Transition Overlay */}
       <AnimatePresence>
@@ -137,14 +137,14 @@ export default function LandingPage() {
         {/* Features Title */}
         <motion.div
           style={{ opacity: featureOpacity, y: featureY }}
-          className="absolute top-[10%] md:top-[15%] flex flex-col items-center z-10 w-full px-6 text-center"
+          className="absolute top-[15%] md:top-[20%] flex flex-col items-center z-10 w-full px-6 text-center"
         >
           <h2 className="text-3xl md:text-5xl font-semibold text-zinc-900 dark:text-white tracking-tight">Unified Intelligence</h2>
           <p className="text-zinc-600 dark:text-zinc-400 mt-4 text-base md:text-lg font-light max-w-xl">Watch as scattered data points converge into a structured, actionable pipeline.</p>
         </motion.div>
 
         {/* Floating Glassmorphic Features Grid */}
-        <div className="absolute inset-0 flex items-center justify-center z-10 mt-[15vh] md:mt-24 pointer-events-none px-4 md:px-8">
+        <div className="absolute inset-0 flex items-center justify-center z-10 mt-[20vh] md:mt-32 pointer-events-none px-4 md:px-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-5xl pointer-events-auto">
             
             {/* Feature 1 */}

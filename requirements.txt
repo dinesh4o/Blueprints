@@ -1,0 +1,13 @@
+requests
+python-dotenv
+langgraph
+fastapi
+uvicorn
+pydantic
+chromadb
+langchain
+langchain-chroma
+langchain-huggingface
+langchain-openai
+langchain-core
+langchain-text-splitters
