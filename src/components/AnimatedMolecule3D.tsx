@@ -8,7 +8,7 @@ declare global {
 
 interface Props {
   cid: number | null;
-  height?: number;
+  height?: number | string;
 }
 
 export default function AnimatedMolecule3D({ cid, height = 260 }: Props) {
@@ -98,18 +98,15 @@ export default function AnimatedMolecule3D({ cid, height = 260 }: Props) {
 
       <div
         ref={viewerRef}
+        className="w-full h-full"
         style={{
-          width: '100%',
-          height: '100%',
           visibility: status === 'ready' ? 'visible' : 'hidden',
-          borderRadius: '0.75rem',
-          overflow: 'hidden',
         }}
       />
 
       {status === 'ready' && (
-        <div className="absolute bottom-2 right-2 z-10">
-          <span className="text-[10px] bg-background/60 backdrop-blur-sm px-2 py-0.5 rounded text-muted-foreground border border-border/50">
+        <div className="absolute bottom-6 w-full text-center z-10 pointer-events-none">
+          <span className="text-[10px] bg-black/60 backdrop-blur-sm px-2 py-0.5 rounded-full text-zinc-400 border border-zinc-800/50 whitespace-nowrap inline-block">
             Drag to rotate · Scroll to zoom
           </span>
         </div>

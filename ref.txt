@@ -1,0 +1,467 @@
+import React, { useEffect, useState } from 'react';
+import { Sparkles } from 'lucide-react';
+
+const BotIcon = ({ color, active, size = 60, flipped = false }: { color: string, active: boolean, size?: number, flipped?: boolean }) => (
+  <div 
+    style={{ 
+      width: size, 
+      height: size, 
+      color: color,
+      transform: flipped ? 'scaleX(-1)' : 'scaleX(1)'
+    }} 
+    className={`transition-all duration-700 ${active ? 'bot-active' : ''}`}
+  >
+    <svg viewBox="0 0 100 100" className="w-full h-full">
+      <rect x="46" y="8" width="8" height="4" fill="currentColor" />
+      <line x1="50" y1="12" x2="50" y2="20" stroke="currentColor" strokeWidth="2" />
+      <circle cx="50" cy="5" r="3" stroke="currentColor" strokeWidth="2" fill="none" />
+      <rect x="14" y="45" width="6" height="16" rx="2" fill="none" stroke="currentColor" strokeWidth="2" />
+      <rect x="80" y="45" width="6" height="16" rx="2" fill="none" stroke="currentColor" strokeWidth="2" />
+      <rect x="20" y="20" width="60" height="56" rx="6" fill="#000000" stroke="currentColor" strokeWidth="2" />
+      <rect x="30" y="35" width="40" height="24" rx="4" fill="none" stroke="currentColor" strokeWidth="2" />
+      <circle cx="40" cy="47" r="4" fill="none" stroke="currentColor" strokeWidth="2" />
+      <circle cx="60" cy="47" r="4" fill="none" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  </div>
+);
+
+export default function ProgressPage() {
+  const [activeStepIndex, setActiveStepIndex] = useState(0);
+
+  const steps = [
+    { source: 0, query: "ClinicalAgent", log: "Executing fetchClinicalData: Retrieving historical clinical trial data and adverse events...", color: "#a1a1aa" },
+    { source: 1, query: "PatentAgent", log: "Executing fetchPatentData: Scanning intellectual property and exclusivity timelines...", color: "#a1a1aa" },
+    { source: 2, query: "LiteratureAgent", log: "Executing fetchLiteratureData: Extracting mechanistic pathways from PubMed corpus...", color: "#a1a1aa" },
+    { source: 3, query: "RegulatoryAgent", log: "Executing fetchRegulatoryData: Cross-referencing FDA/EMA approval trajectories...", color: "#a1a1aa" },
+    { source: 4, query: "TargetAgent", log: "Executing fetchTargetData: Identifying primary and secondary protein targets...", color: "#a1a1aa" },
+    { source: 5, query: "PubChemAgent", log: "Executing fetchPubChemData: Retrieving physicochemical properties and assay results...", color: "#a1a1aa" },
+    { source: 6, query: "SimilarityAgent", log: "Executing fetchSimilarMolecules: Computing Tanimoto scores against active compounds...", color: "#a1a1aa" },
+    { source: 7, query: "CompetitiveAgent", log: "Executing mocked step 4: Analyzing competitive landscape and market alternatives...", color: "#a1a1aa" },
+    { source: 8, query: "Advocate & Skeptic Agents", log: "Debate Node: Advocate agent highlights efficacy metrics while Skeptic flags mitochondrial toxicity risks.", color: "#e4e4e7" },
+    { source: 9, query: "JudgeAgent / LLM Synthesis", log: "Executing synthesizeAndEvaluate: Weighing debate outcomes. Generating final viability score and compiled report.", color: "#ffffff" }
+  ];
+
+  useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const stepDuration = activeStepIndex === 8 ? 8000 : 3500;
+
+    if (activeStepIndex < steps.length - 1) {
+      timeoutId = setTimeout(() => {
+        setActiveStepIndex(prev => prev + 1);
+      }, stepDuration);
+    }
+
+    return () => clearTimeout(timeoutId);
+  }, [activeStepIndex, steps.length]);
+
+  const currentStep = steps[activeStepIndex];
+  const isDataPhase = activeStepIndex < 8;
+  const isDebatePhase = activeStepIndex === 8;
+  const isJudgePhase = activeStepIndex === 9;
+  const progressPercent = Math.round(((activeStepIndex + 1) / steps.length) * 100);
+
+  return (
+    <div className="min-h-screen bg-[#000000] text-zinc-300 font-mono flex flex-col items-center justify-center relative overflow-hidden">
+      <style>{`
+        @keyframes pulseGlow {
+          0%, 100% { filter: drop-shadow(0 0 10px currentColor); }
+          50% { filter: drop-shadow(0 0 20px currentColor); }
+        }
+        .bot-active {
+          animation: pulseGlow 2s ease-in-out infinite;
+        }
+        @keyframes popIn {
+          0% { opacity: 0; transform: translateY(10px) scale(0.95); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .argue-bubble {
+          opacity: 0;
+          animation: popIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+      `}</style>
+
+      <header className="absolute top-0 w-full p-8 flex justify-between items-center z-50">
+        <div className="flex flex-col">
+          <div className="text-zinc-100 font-medium tracking-widest text-sm">LANGGRAPH PIPELINE</div>
+          <div className="text-zinc-500 text-[10px] tracking-widest uppercase mt-1">Multi-Agent Orchestration</div>
+        </div>
+        <div className="flex flex-col items-end gap-2 w-56">
+          <div className="text-xs text-zinc-400 tracking-wider">{progressPercent}% COMPLETE</div>
+          <div className="w-full h-1 bg-zinc-900 rounded-full overflow-hidden">
+            <div 
+              className="h-full transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] bg-zinc-300"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+        </div>
+      </header>
+
+      <div className="w-full max-w-[1000px] h-[600px] relative pointer-events-none flex items-center justify-center">
+        <svg className="absolute inset-0 w-full h-full">
+          <defs>
+            <linearGradient id="beam" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="transparent" />
+              <stop offset="50%" stopColor="#ffffff" />
+              <stop offset="100%" stopColor="transparent" />
+            </linearGradient>
+          </defs>
+
+          <g className={`transition-opacity duration-700 ${isDataPhase ? 'opacity-100' : 'opacity-0'}`}>
+            <line x1="500" y1="140" x2="500" y2="280" stroke="#27272a" strokeWidth="1.5" strokeDasharray="4 4" />
+            <rect x="499" y="140" width="2" height="140" fill="url(#beam)">
+              <animate attributeName="y" values="100;280" dur="1.5s" repeatCount="indefinite" />
+              <animate attributeName="opacity" values="0;1;0" dur="1.5s" repeatCount="indefinite" />
+            </rect>
+          </g>
+
+          <g className={`transition-opacity duration-700 ${isDebatePhase ? 'opacity-100' : 'opacity-0'}`}>
+            <path d="M 300 280 Q 500 180 700 280" fill="none" stroke="#52525b" strokeWidth="1.5" strokeDasharray="4 4" className="opacity-40" />
+            <path d="M 300 280 Q 500 380 700 280" fill="none" stroke="#52525b" strokeWidth="1.5" strokeDasharray="4 4" className="opacity-40" />
+          </g>
+        </svg>
+
+        <div className={`absolute inset-0 flex items-center justify-center transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${isDataPhase ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}`}>
+          <div className="absolute top-[80px] flex flex-col items-center">
+            <BotIcon color="#71717a" active={isDataPhase} size={60} />
+            <div className="mt-4 border border-zinc-800 bg-[#000000] px-4 py-1.5 rounded-full text-[10px] tracking-widest text-zinc-400 uppercase shadow-lg">Supervisor</div>
+          </div>
+
+          {steps.slice(0, 8).map((step, i) => {
+            const offset = i - activeStepIndex;
+            const isCurrent = offset === 0;
+            const isVisible = Math.abs(offset) <= 2;
+            
+            return (
+              <div 
+                key={i}
+                className="absolute transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] flex flex-col items-center"
+                style={{
+                  top: '320px',
+                  transform: `translateX(${offset * 250}px) scale(${isCurrent ? 1 : 0.7})`,
+                  opacity: isVisible ? (isCurrent ? 1 : 0.2) : 0,
+                  filter: isCurrent ? 'none' : 'blur(4px)',
+                  zIndex: isCurrent ? 20 : 10
+                }}
+              >
+                <BotIcon color={isCurrent ? "#ffffff" : "#71717a"} active={isCurrent} size={isCurrent ? 90 : 70} />
+                <div 
+                  className="mt-6 border px-5 py-2 rounded-full text-[11px] tracking-widest uppercase shadow-2xl transition-all duration-700" 
+                  style={{ 
+                    borderColor: isCurrent ? '#52525b' : '#27272a', 
+                    backgroundColor: isCurrent ? '#18181b' : '#000000',
+                    color: isCurrent ? '#ffffff' : '#a1a1aa'
+                  }}
+                >
+                  {step.query}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        <div className={`absolute inset-0 transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${isDebatePhase || isJudgePhase ? 'opacity-100 scale-100' : 'opacity-0 scale-105 pointer-events-none'}`}>
+          <div 
+            className={`absolute top-[280px] left-[300px] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center transition-all duration-1000 ${isJudgePhase ? 'opacity-20 -translate-x-[40px] scale-90 blur-sm' : 'opacity-100'}`}
+          >
+            <BotIcon color="#e4e4e7" active={isDebatePhase} size={110} />
+            <div className="mt-6 border border-zinc-700 bg-zinc-900 px-6 py-2 rounded-full text-[11px] tracking-widest text-zinc-200 uppercase shadow-lg">Advocate</div>
+            
+            {isDebatePhase && (
+              <div className="mt-6 w-60 flex flex-col gap-3">
+                <div className="argue-bubble bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-[11px] text-zinc-300 shadow-xl" style={{ animationDelay: '0.5s' }}>
+                  <span className="text-zinc-100 font-semibold block mb-1">Efficacy Validation:</span>
+                  Target affinity scores exceed baseline expectations by 40%.
+                </div>
+                <div className="argue-bubble bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-[11px] text-zinc-300 shadow-xl" style={{ animationDelay: '3.5s' }}>
+                  <span className="text-zinc-100 font-semibold block mb-1">Risk Mitigation:</span>
+                  Phase 1/2 profiles confirm high safety margins. Benefits outweigh edge-case risks.
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div 
+            className={`absolute top-[280px] left-[700px] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center transition-all duration-1000 ${isJudgePhase ? 'opacity-20 translate-x-[40px] scale-90 blur-sm' : 'opacity-100'}`}
+          >
+            <BotIcon color="#a1a1aa" active={isDebatePhase} size={110} flipped={true} />
+            <div className="mt-6 border border-zinc-800 bg-zinc-950 px-6 py-2 rounded-full text-[11px] tracking-widest text-zinc-400 uppercase shadow-lg">Skeptic</div>
+            
+            {isDebatePhase && (
+              <div className="mt-6 w-60 flex flex-col gap-3">
+                <div className="argue-bubble bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-[11px] text-zinc-300 shadow-xl" style={{ animationDelay: '2s' }}>
+                  <span className="text-zinc-400 font-semibold block mb-1">Toxicity Warning:</span>
+                  Mitochondrial complex I interactions detected.
+                </div>
+                <div className="argue-bubble bg-[#09090b] border border-zinc-800 rounded-lg p-3 text-[11px] text-zinc-300 shadow-xl" style={{ animationDelay: '5s' }}>
+                  <span className="text-zinc-400 font-semibold block mb-1">Constraint Requirement:</span>
+                  Dose-dependent hepatotoxicity requires strict limitation protocols.
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className={`absolute top-[280px] left-[500px] -translate-x-1/2 -translate-y-1/2 transition-opacity duration-500 ${isDebatePhase ? 'opacity-100' : 'opacity-0'}`}>
+            <div className="text-zinc-500 font-mono text-xl tracking-widest opacity-80">VS</div>
+          </div>
+
+          <div className={`absolute top-[240px] left-[500px] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center transition-all duration-1000 ${isJudgePhase ? 'opacity-100 scale-100' : 'opacity-0 scale-50 pointer-events-none'}`}>
+            <div className="relative">
+              <div className="absolute inset-0 bg-zinc-800/20 blur-[40px] rounded-full animate-pulse"></div>
+              <BotIcon color="#ffffff" active={isJudgePhase} size={130} />
+            </div>
+            <div className="mt-6 border border-zinc-600 bg-zinc-800 px-8 py-2 rounded-full text-[11px] tracking-widest text-white uppercase shadow-lg">Judge Synthesis</div>
+            
+            {isJudgePhase && (
+              <div className="mt-6 w-[340px] bg-[#09090b] border border-zinc-800 rounded-xl p-6 text-center shadow-2xl argue-bubble" style={{ animationDelay: '0.8s' }}>
+                <div className="text-zinc-500 text-[10px] tracking-widest uppercase mb-3">Verdict & Phoenix Score</div>
+                <div className="text-5xl font-light text-zinc-100 mb-3 tracking-tight">7.0<span className="text-2xl text-zinc-600">/10</span></div>
+                <div className="text-zinc-300 text-[11px] leading-relaxed">
+                  Viable for repurposing.<br/>Approval recommended with strict dose limitation constraints to mitigate complex I interactions.
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="absolute bottom-12 w-full max-w-3xl flex flex-col gap-4 px-8 z-50">
+        <div 
+          key={`header-${activeStepIndex}`}
+          className="border border-zinc-800 bg-[#09090b] rounded-lg px-5 py-3 flex items-center gap-4 self-start shadow-2xl animate-in slide-in-from-bottom-2 fade-in duration-500"
+        >
+          <Sparkles size={16} className="text-zinc-400" />
+          <span className="text-[13px] font-medium tracking-wide text-zinc-200">{currentStep.query}</span>
+        </div>
+        
+        <div 
+          key={`body-${activeStepIndex}`}
+          className="border rounded-xl p-6 w-full shadow-2xl bg-[#000000]/90 backdrop-blur-xl animate-in slide-in-from-bottom-4 fade-in duration-700 border-zinc-800"
+        >
+          <p className="text-[15px] leading-relaxed tracking-wide font-mono text-zinc-300">
+            {currentStep.log}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+import React, { useState, useRef } from 'react';
+import { Search, Activity, FileText, Sparkles, BrainCircuit, Send } from 'lucide-react';
+import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
+
+// Mocked dependencies for the preview environment to prevent compilation errors
+const useAuth = () => ({ user: { id: 'demo-user' } });
+const useNavigate = () => (path: string) => console.log('Navigating to', path);
+
+export default function LandingPage() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [isNavigating, setIsNavigating] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const { scrollYProgress } = useScroll({
+    target: containerRef,
+    offset: ["start start", "end end"]
+  });
+
+  // Hero section fading out as we scroll down
+  const textOpacity = useTransform(scrollYProgress, [0, 0.25], [1, 0]);
+  const textY = useTransform(scrollYProgress, [0, 0.25], [0, -100]);
+  const textScale = useTransform(scrollYProgress, [0, 0.25], [1, 0.9]);
+
+  // Features title appearing
+  const featureOpacity = useTransform(scrollYProgress, [0.2, 0.4], [0, 1]);
+  const featureY = useTransform(scrollYProgress, [0.2, 0.4], [50, 0]);
+
+  // Floating Glass Cards settling into place (Scattered -> Grid)
+  // Card 1: Top Left
+  const c1X = useTransform(scrollYProgress, [0, 0.4], ["-30vw", "0vw"]);
+  const c1Y = useTransform(scrollYProgress, [0, 0.4], ["15vh", "0vh"]);
+  const c1R = useTransform(scrollYProgress, [0, 0.4], [-25, 0]);
+
+  // Card 2: Top Right
+  const c2X = useTransform(scrollYProgress, [0, 0.4], ["30vw", "0vw"]);
+  const c2Y = useTransform(scrollYProgress, [0, 0.4], ["35vh", "0vh"]);
+  const c2R = useTransform(scrollYProgress, [0, 0.4], [15, 0]);
+
+  // Card 3: Bottom Left
+  const c3X = useTransform(scrollYProgress, [0, 0.4], ["-20vw", "0vw"]);
+  const c3Y = useTransform(scrollYProgress, [0, 0.4], ["45vh", "0vh"]);
+  const c3R = useTransform(scrollYProgress, [0, 0.4], [20, 0]);
+
+  // Card 4: Bottom Right
+  const c4X = useTransform(scrollYProgress, [0, 0.4], ["35vw", "0vw"]);
+  const c4Y = useTransform(scrollYProgress, [0, 0.4], ["10vh", "0vh"]);
+  const c4R = useTransform(scrollYProgress, [0, 0.4], [-15, 0]);
+
+  const handleStartAnalysis = () => {
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+    setIsNavigating(true);
+    setTimeout(() => {
+      navigate('/search');
+    }, 1500);
+  };
+
+  return (
+    <div ref={containerRef} className="relative h-[250vh] bg-[#000000] overflow-x-hidden font-sans selection:bg-zinc-800">
+      
+      {/* Navigation Transition Overlay */}
+      <AnimatePresence>
+        {isNavigating && (
+          <motion.div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.4, delay: 1.1 }}
+              className="absolute inset-0 bg-[#000000] z-40"
+            />
+            <motion.div
+              initial={{ x: "-50vw", y: "50vh", scale: 0.5, opacity: 0 }}
+              animate={{ x: 0, y: 0, scale: 1.5, opacity: 1 }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
+              className="relative z-50 flex items-center justify-center"
+            >
+              <motion.div
+                initial={{ x: 0, y: 0, rotate: 0 }}
+                animate={{ x: -300, y: -200, rotate: -45, opacity: 0 }}
+                transition={{ duration: 0.6, delay: 0.8, ease: "easeInOut" }}
+                style={{ clipPath: 'polygon(0 0, 50% 0, 50% 100%, 0 100%)' }}
+                className="absolute"
+              >
+                <Send className="w-24 h-24 text-zinc-200 drop-shadow-2xl" strokeWidth={1} fill="currentColor" />
+              </motion.div>
+              <motion.div
+                initial={{ x: 0, y: 0, rotate: 0 }}
+                animate={{ x: 300, y: 200, rotate: 45, opacity: 0 }}
+                transition={{ duration: 0.6, delay: 0.8, ease: "easeInOut" }}
+                style={{ clipPath: 'polygon(50% 0, 100% 0, 100% 100%, 50% 100%)' }}
+                className="absolute"
+              >
+                <Send className="w-24 h-24 text-zinc-200 drop-shadow-2xl" strokeWidth={1} fill="currentColor" />
+              </motion.div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="sticky top-0 h-screen w-full flex flex-col items-center justify-center overflow-hidden">
+        
+        {/* Subtle Grid Background */}
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:64px_64px] pointer-events-none mix-blend-overlay [mask-image:radial-gradient(ellipse_60%_60%_at_50%_50%,#000_10%,transparent_100%)]"></div>
+
+        {/* Hero Section */}
+        <motion.div
+          style={{ opacity: textOpacity, y: textY, scale: textScale }}
+          className="absolute inset-0 flex flex-col items-center justify-center z-20 pointer-events-none px-6"
+        >
+          <div className="pointer-events-auto flex flex-col items-center text-center">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300 text-xs font-medium tracking-wide mb-8 shadow-2xl">
+              <Sparkles size={14} className="text-zinc-400" />
+              NEXT-GEN DISCOVERY ENGINE
+            </div>
+            
+            <h1 className="text-5xl sm:text-6xl md:text-8xl font-semibold tracking-tighter text-white leading-[1.1] mb-8 max-w-4xl">
+              Autonomous <br/>
+              <span className="text-transparent bg-clip-text bg-gradient-to-b from-zinc-400 to-zinc-700">
+                Research Platform
+              </span>
+            </h1>
+            
+            <p className="text-lg md:text-xl text-zinc-400 max-w-2xl text-center mb-10 font-light leading-relaxed">
+              Analyze clinical trials, literature, and regulatory data in seconds using advanced multi-agent orchestrations.
+            </p>
+            
+            <button
+              onClick={handleStartAnalysis}
+              className="h-14 px-10 text-sm tracking-wide font-medium bg-white text-black hover:bg-zinc-200 rounded-full transition-all duration-300 shadow-[0_0_40px_-10px_rgba(255,255,255,0.3)] hover:shadow-[0_0_60px_-15px_rgba(255,255,255,0.5)] hover:scale-105"
+            >
+              Start Analysis
+            </button>
+          </div>
+        </motion.div>
+
+        {/* Features Title */}
+        <motion.div
+          style={{ opacity: featureOpacity, y: featureY }}
+          className="absolute top-[10%] md:top-[15%] flex flex-col items-center z-10 w-full px-6 text-center"
+        >
+          <h2 className="text-3xl md:text-5xl font-semibold text-white tracking-tight">Unified Intelligence</h2>
+          <p className="text-zinc-400 mt-4 text-base md:text-lg font-light max-w-xl">Watch as scattered data points converge into a structured, actionable pipeline.</p>
+        </motion.div>
+
+        {/* Floating Glassmorphic Features Grid */}
+        <div className="absolute inset-0 flex items-center justify-center z-10 mt-[15vh] md:mt-24 pointer-events-none px-4 md:px-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-5xl pointer-events-auto">
+            
+            {/* Feature 1 */}
+            <motion.div style={{ x: c1X, y: c1Y, rotate: c1R }} className="w-full">
+              <motion.div animate={{ y: [0, -12, 0] }} transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }} className="h-full">
+                <div className="bg-[#09090b]/80 border border-zinc-800 hover:border-zinc-600 backdrop-blur-2xl p-8 rounded-3xl flex flex-col h-full shadow-[0_8px_32px_0_rgba(0,0,0,0.5)] transition-colors duration-500 group">
+                  <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-2xl w-fit mb-6 group-hover:scale-110 transition-transform duration-500">
+                    <Search className="text-zinc-200 w-6 h-6" />
+                  </div>
+                  <h3 className="text-xl font-medium text-zinc-100 mb-3 tracking-tight">Instant Search</h3>
+                  <p className="text-zinc-400 leading-relaxed font-light">Query millions of data points instantly across global databases and private registries with deep semantic understanding.</p>
+                </div>
+              </motion.div>
+            </motion.div>
+
+            {/* Feature 2 */}
+            <motion.div style={{ x: c2X, y: c2Y, rotate: c2R }} className="w-full">
+              <motion.div animate={{ y: [0, 15, 0] }} transition={{ duration: 7, repeat: Infinity, ease: "easeInOut", delay: 1 }} className="h-full">
+                <div className="bg-[#09090b]/80 border border-zinc-800 hover:border-zinc-600 backdrop-blur-2xl p-8 rounded-3xl flex flex-col h-full shadow-[0_8px_32px_0_rgba(0,0,0,0.5)] transition-colors duration-500 group">
+                  <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-2xl w-fit mb-6 group-hover:scale-110 transition-transform duration-500">
+                    <BrainCircuit className="text-zinc-200 w-6 h-6" />
+                  </div>
+                  <h3 className="text-xl font-medium text-zinc-100 mb-3 tracking-tight">AI Synthesis</h3>
+                  <p className="text-zinc-400 leading-relaxed font-light">Multi-agent systems synthesize complex pharmacological papers and disparate data into actionable insights.</p>
+                </div>
+              </motion.div>
+            </motion.div>
+
+            {/* Feature 3 */}
+            <motion.div style={{ x: c3X, y: c3Y, rotate: c3R }} className="w-full">
+              <motion.div animate={{ y: [0, -10, 0] }} transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 2 }} className="h-full">
+                <div className="bg-[#09090b]/80 border border-zinc-800 hover:border-zinc-600 backdrop-blur-2xl p-8 rounded-3xl flex flex-col h-full shadow-[0_8px_32px_0_rgba(0,0,0,0.5)] transition-colors duration-500 group">
+                  <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-2xl w-fit mb-6 group-hover:scale-110 transition-transform duration-500">
+                    <Activity className="text-zinc-200 w-6 h-6" />
+                  </div>
+                  <h3 className="text-xl font-medium text-zinc-100 mb-3 tracking-tight">Real-time Data</h3>
+                  <p className="text-zinc-400 leading-relaxed font-light">Live tracking and dynamic monitoring of competitive clinical trials and shifting regulatory pathways.</p>
+                </div>
+              </motion.div>
+            </motion.div>
+
+            {/* Feature 4 */}
+            <motion.div style={{ x: c4X, y: c4Y, rotate: c4R }} className="w-full">
+              <motion.div animate={{ y: [0, 12, 0] }} transition={{ duration: 6.5, repeat: Infinity, ease: "easeInOut", delay: 0.5 }} className="h-full">
+                <div className="bg-[#09090b]/80 border border-zinc-800 hover:border-zinc-600 backdrop-blur-2xl p-8 rounded-3xl flex flex-col h-full shadow-[0_8px_32px_0_rgba(0,0,0,0.5)] transition-colors duration-500 group">
+                  <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-2xl w-fit mb-6 group-hover:scale-110 transition-transform duration-500">
+                    <FileText className="text-zinc-200 w-6 h-6" />
+                  </div>
+                  <h3 className="text-xl font-medium text-zinc-100 mb-3 tracking-tight">Structured Reports</h3>
+                  <p className="text-zinc-400 leading-relaxed font-light">Automated generation of submission-ready evaluation reports, detailed target profiles, and viability scores.</p>
+                </div>
+              </motion.div>
+            </motion.div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

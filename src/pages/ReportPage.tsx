@@ -15,8 +15,10 @@ import { Badge } from '@/components/ui/badge';
 import AnimatedMolecule from '@/components/AnimatedMolecule';
 import AnimatedMolecule3D from '@/components/AnimatedMolecule3D';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { MolecularTwinReportCard } from '@/components/MolecularTwinReportCard';
+import { RepurposingAlternativeFinder } from '@/components/RepurposingAlternativeFinder';
 
-type Tab = 'overview' | 'indications' | 'science' | 'market';
+type Tab = 'overview' | 'indications' | 'science' | 'market' | 'twin';
 
 interface GaugeScoreProps {
   title: string;
@@ -216,16 +218,9 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
   ]));
 
   return (
-    <div className="animate-in fade-in duration-500 w-full max-w-7xl mx-auto">
+<div className="animate-in fade-in duration-500 w-full mx-auto">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-medium text-zinc-100">Overview</h2>
-        <button 
-          onClick={onStartSimulation}
-          className="flex items-center gap-2 px-5 py-2 bg-[#121214] hover:bg-[#18181b] border border-[#27272a] hover:border-zinc-600 text-zinc-300 rounded-lg transition-all shadow-sm"
-        >
-          <Play className="w-4 h-4" />
-          <span className="text-sm font-medium">Debate Simulation</span>
-        </button>
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -263,9 +258,9 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
                 </Button>
               </div>
             </div>
-            <div className="w-full aspect-square max-w-[340px] bg-[#18181b] border border-[#27272a] rounded-full flex items-center justify-center relative shadow-inner overflow-hidden">
+            <div className="w-full aspect-square max-w-[340px] bg-black border border-[#27272a] rounded-full flex items-center justify-center relative shadow-inner overflow-hidden mx-auto">
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.03)_0%,transparent_70%)] rounded-full"></div>
-              <div className="w-[80%] h-[80%] relative z-10 flex items-center justify-center">
+              <div className="w-full h-full relative z-10 flex items-center justify-center">
                 <AnimatePresence mode="wait">
                   {structureMode === '2d' ? (
                     <motion.div key="2d" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -274,10 +269,10 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
                     </motion.div>
                   ) : (
                     <motion.div key="3d" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2 }} className="w-full h-full flex justify-center items-center p-4">
+                      transition={{ duration: 0.2 }} className="w-full h-full flex justify-center items-center">
                       {report.pubchem_data?.cid ? (
-                        <div className="w-[200px] h-[200px] rounded-full overflow-hidden flex items-center justify-center">
-                          <AnimatedMolecule3D cid={report.pubchem_data?.cid} height={180} />
+                        <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center">
+                          <AnimatedMolecule3D cid={report.pubchem_data?.cid} height="100%" />
                         </div>
                       ) : (
                         <span className="text-zinc-600 text-sm">3D Not Available</span>
@@ -328,6 +323,13 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
               ))}
             </div>
           </div>
+
+          {report.pubchem_data?.cid && (
+            <div className="flex-1 min-h-[160px]">
+              <MolecularTwinReportCard cid={report.pubchem_data.cid} />
+            </div>
+          )}
+
         </div>
       </div>
     </div>
@@ -645,6 +647,7 @@ export default function ReportPage() {
     { id: 'indications', label: 'Indications' },
     { id: 'science', label: 'Science' },
     { id: 'market', label: 'Market Intelligence' },
+    { id: 'twin', label: 'Molecular Twin' },
   ] as const;
 
   return (
@@ -729,12 +732,22 @@ export default function ReportPage() {
             </div>
           </div>
 
-          <main className="flex-1 w-full px-6 lg:px-12 pb-20 relative z-10 mx-auto max-w-7xl">
+          <main className="flex-1 w-full px-6 lg:px-12 pb-20 relative z-10 mx-auto max-w-[1600px]">
             {activeTab === 'overview' && <OverviewTab report={report} onStartSimulation={() => setShowSimulation(true)} structureMode={structureMode} setStructureMode={setStructureMode} />}
             {activeTab === 'indications' && <IndicationsTab report={report} />}
             {activeTab === 'science' && <ScienceTab report={report} />}
-            {activeTab === 'market' && <MarketTab report={report} currency={currency} formatMarketSize={formatMarketSize} />}
-          </main>
+            {activeTab === 'market' && <MarketTab report={report} currency={currency} formatMarketSize={formatMarketSize} />}              {activeTab === 'twin' && (
+                <div className="animate-in fade-in duration-500 w-full max-w-7xl mx-auto space-y-8">
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-xl font-medium text-zinc-100">Molecular Twin Analysis</h2>
+                  </div>
+                  {report?.pubchem_data?.cid ? (
+                      <RepurposingAlternativeFinder initialCid={report.pubchem_data.cid} hideSearch={true} />
+                  ) : (
+                      <p className="text-zinc-500 italic">No CID found for this compound.</p>
+                  )}
+                </div>
+              )}          </main>
         </div>
 
         <div 

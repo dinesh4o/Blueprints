@@ -355,6 +355,48 @@ async function fetchTargetData(state: typeof GraphState.State) {
   return { targetData: { score: Math.random() * 10, targetsFound: 5 } };
 }
 
+
+
+// Patent Agent
+async function fetchPatentData(state: typeof GraphState.State) {
+  const cid = state.pubchemData?.cid;
+  if (!cid) return { patentData: [] };
+  console.log(`[PatentAgent] Fetching patents for CID ${cid}...`);
+  try {
+    const res = await axios.get(`https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/${cid}/JSON?heading=Patents`, { timeout: 10000 });
+    const ids: string[] = [];
+    const urls: string[] = [];
+    
+    function extract(node: any) {
+      if (node?.Value?.StringWithMarkup) {
+        for (const item of node.Value.StringWithMarkup) {
+          if (item?.String && item?.Markup?.[0]?.URL) {
+            ids.push(item.String);
+            urls.push(item.Markup[0].URL);
+          }
+        }
+      }
+      for (const sec of node?.Section || []) extract(sec);
+      for (const info of node?.Information || []) extract(info);
+    }
+    
+    if (res.data?.Record) extract(res.data.Record);
+    
+    const patents = [];
+    for (let i = 0; i < ids.length; i++) {
+        if (ids[i].startsWith('US') || ids[i].startsWith('EP') || ids[i].startsWith('WO')) {
+            patents.push({ id: ids[i], title: `Patent ${ids[i]}`, url: urls[i], year: 2023, assignee: 'Unknown' });
+        }
+    }
+    // De-duplicate array
+    const dedupedInfoString = patents.filter((v,i,a)=>a.findIndex(v2=>(v2.id===v.id))===i);
+    return { patentData: dedupedInfoString.slice(0, 5) };
+  } catch (e) {
+    console.error('[PatentAgent] Failed', e);
+    return { patentData: [] };
+  }
+}
+
 // LLM Synthesis Agent (Groq — llama-3.3-70b)
 async function synthesizeAndEvaluate(state: typeof GraphState.State) {
   console.log(`[JudgeAgent] Synthesizing for ${state.molecule}...`);
@@ -453,11 +495,13 @@ const workflow = new StateGraph(GraphState)
   .addNode('fetchLiterature',fetchLiteratureData)
   .addNode('fetchRegulatory',fetchRegulatoryData)
   .addNode('fetchTarget',    fetchTargetData)
+  .addNode('fetchPatent',    fetchPatentData)
   .addNode('synthesize',     synthesizeAndEvaluate)
 
   // PubChem → SimilarMolecules (sequential: needs CID)
   .addEdge(START,          'fetchPubChem')
   .addEdge('fetchPubChem', 'fetchSimilar')
+  .addEdge('fetchPubChem', 'fetchPatent')
   .addEdge('fetchSimilar', 'synthesize')
 
   // Independent parallel fetchers → synthesize
@@ -469,6 +513,7 @@ const workflow = new StateGraph(GraphState)
   .addEdge('fetchLiterature','synthesize')
   .addEdge('fetchRegulatory','synthesize')
   .addEdge('fetchTarget',    'synthesize')
+  .addEdge('fetchPatent',    'synthesize')
 
   .addEdge('synthesize', END);
 

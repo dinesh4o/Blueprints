@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import * as d3 from 'd3';
 
 const ELEMENT_SYMBOLS: Record<number, string> = {
   1: 'H', 6: 'C', 7: 'N', 8: 'O', 9: 'F', 15: 'P', 16: 'S', 17: 'Cl',
@@ -70,25 +71,40 @@ export default function AnimatedMolecule({ molecule, size = 220 }: { molecule?: 
         const newAtoms = pAtoms.map((elementNum: number, i: number) => {
           const symbol = ELEMENT_SYMBOLS[elementNum] || 'X';
           const r = ATOM_RADII[symbol] || 12;
-          
+
           const ox = pCoords.x[i] || 0;
           const oy = pCoords.y[i] || 0;
-          
+
           // SVG y-axis is inverted relative to standard cartesian
           const x = (ox - cx) * scale + 170;
           const y = -(oy - cy) * scale + 110;
 
-          return { x, y, l: symbol, r };
+          return { id: i, x, y, origX: x, origY: y, l: symbol, r };
         });
 
         // bonds use 1-based indexing in PubChem
-        const newBonds: number[][] = [];
+        const edgeLinks = [];
         for (let i = 0; i < pBondsX.length; i++) {
-          newBonds.push([pBondsX[i] - 1, pBondsY[i] - 1]);
+          edgeLinks.push({ source: pBondsX[i] - 1, target: pBondsY[i] - 1 });
         }
 
+        // Apply D3 force simulation to solve overlapping
+        const simulation = d3.forceSimulation(newAtoms as any)
+          .force("link", d3.forceLink(edgeLinks).id((d: any) => d.id).distance(22).strength(1))
+          .force("collide", d3.forceCollide().radius((d: any) => d.r * 1.4).strength(1))
+          .force("charge", d3.forceManyBody().strength(-30))
+          .force("x", d3.forceX().x((d: any) => d.origX).strength(0.5))
+          .force("y", d3.forceY().y((d: any) => d.origY).strength(0.5))
+          .stop();
+
+        for (let i = 0; i < 60; i++) {
+          simulation.tick();
+        }
+
+        const finalBonds = edgeLinks.map(b => [(b.source as any).id, (b.target as any).id]);
+
         setAtoms(newAtoms);
-        setBonds(newBonds);
+        setBonds(finalBonds);
       })
       .catch(err => {
         console.error("Failed to fetch molecule structure:", err);

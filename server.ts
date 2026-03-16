@@ -99,8 +99,8 @@ function buildRepurposingCandidates(clinicalData: any[]) {
 }
 
 async function startServer() {
-  // Connect to MongoDB
-  await connectDB();
+  // Connect to MongoDB in background — don't block server startup
+  connectDB().catch(() => {});
 
   const app = express();
   const PORT = 3000;
@@ -176,18 +176,14 @@ async function startServer() {
       molecule,
       status: 'running',
       steps: [
-        { name: 'ClinicalAgent', label: 'Clinical Trials', status: 'running', log: 'Initializing...' },
+        { name: 'PubChemAgent', label: 'PubChem Verify', status: 'running', log: 'Initializing...' },
+        { name: 'ClinicalAgent', label: 'Clinical Trials', status: 'waiting', log: 'Pending...' },
         { name: 'PatentAgent', label: 'Patent Search', status: 'waiting', log: 'Pending...' },
         { name: 'LiteratureAgent', label: 'Literature Search', status: 'waiting', log: 'Pending...' },
         { name: 'RegulatoryAgent', label: 'FDA Data', status: 'waiting', log: 'Pending...' },
-        { name: 'CompetitiveAgent', label: 'Competitive Landscape', status: 'waiting', log: 'Pending...' },
-        { name: 'FailureAgent', label: 'Failure Analysis', status: 'waiting', log: 'Pending...' },
-        { name: 'AdvocateAgent', label: 'Advocate AI', status: 'waiting', log: 'Pending...' },
-        { name: 'SkepticAgent', label: 'Skeptic AI', status: 'waiting', log: 'Pending...' },
-        { name: 'JudgeAgent', label: 'Judge AI', status: 'waiting', log: 'Pending...' },
-        { name: 'MolecularTwinAgent', label: 'Structural Analogs', status: 'waiting', log: 'Pending...' },
-        { name: 'OpenTargetsAgent', label: 'PubChem Verify', status: 'waiting', log: 'Pending...' },
-        { name: 'KOLNetworkAgent', label: 'KOL Network', status: 'waiting', log: 'Pending...' },
+        { name: 'TargetAgent', label: 'Disease Targets', status: 'waiting', log: 'Pending...' },
+        { name: 'AnalogAgent', label: 'Structural Analogs', status: 'waiting', log: 'Pending...' },
+        { name: 'SynthesisAgent', label: 'Report Synthesis', status: 'waiting', log: 'Pending...' },
       ],
       createdAt: new Date().toISOString(),
     });
@@ -279,14 +275,15 @@ async function startServer() {
     };
 
     try {
-      // Create dramatic spacing so the user can experience the pipeline building
-      updateStep(0, 'running', 'Querying ClinicalTrials...');
-      updateStep(2, 'running', 'Querying PubMed...');
-      updateStep(3, 'running', 'Querying FDA Labels...');
+      updateStep(0, 'running', 'Verifying in PubChem...');
+      updateStep(1, 'running', 'Querying ClinicalTrials...');
+      updateStep(3, 'running', 'Querying PubMed...');
+      updateStep(4, 'running', 'Querying FDA Labels...');
 
-      await new Promise(r => setTimeout(r, 1000));
-      updateStep(10, 'running', 'Verifying in PubChem...');
-      updateStep(9, 'running', 'Finding structural analogs...');
+      await new Promise(r => setTimeout(r, 500));
+      updateStep(2, 'running', 'Searching USPTO...');
+      updateStep(5, 'running', 'Identifying disease targets...');
+      updateStep(6, 'running', 'Finding structural analogs...');
 
       // Let LangGraph do all the parallel execution
       const resultState = await runLangGraphPipeline(molecule);
@@ -309,8 +306,8 @@ async function startServer() {
       if (isFakeMolecule) {
          // Immediate short-circuit for fake or completely unknown molecules
          updateStep(0, 'done', 'No real-world data found.', 0);
-         updateStep(6, 'done', 'Processing bypassed.');
-         
+         updateStep(7, 'done', 'Processing bypassed.');
+
          const job = jobs.get(jobId);
          if (job) {
            const report = {
@@ -344,40 +341,22 @@ async function startServer() {
          return;
       }
 
-      updateStep(0, 'done', 'Data retrieved.', clinicalData.length);
-      await new Promise(r => setTimeout(r, 800));
-      updateStep(2, 'done', 'Abstracts embedded.', literatureData.length);
-      await new Promise(r => setTimeout(r, 800));
-      updateStep(3, 'done', 'Label data parsed.', 1);
-
       const pubchemLabel = pubchemExists === true
         ? `CID ${resultState.pubchemData?.cid || 'found'} — ${resultState.pubchemData?.molecular_formula || 'verified'}`
         : pubchemExists === false ? 'Not in PubChem (fake)' : 'PubChem timeout';
-      updateStep(10, 'done', pubchemLabel, pubchemExists ? 1 : 0);
+      updateStep(0, 'done', pubchemLabel, pubchemExists ? 1 : 0);
+
+      updateStep(1, 'done', 'Data retrieved.', clinicalData.length);
+      updateStep(2, 'done', `Found ${resultState.patentData?.length || 0} patents.`, resultState.patentData?.length || 0);
+      updateStep(3, 'done', 'Abstracts embedded.', literatureData.length);
+      updateStep(4, 'done', 'Label data parsed.', 1);
+      updateStep(5, 'done', `Found ${resultState.targetData?.targetsFound || 0} targets.`, resultState.targetData?.targetsFound || 0);
 
       const similarMolecules = resultState.similarMolecules || [];
-      updateStep(9, 'done', `${similarMolecules.length} structural analogs analyzed`, similarMolecules.length);
-
-      // Simulated nodes for now
-      updateStep(1, 'running', 'Searching USPTO...');
-      updateStep(9, 'running', 'Finding Similar Compounds...');
-      await new Promise(r => setTimeout(r, 1500));
-      updateStep(1, 'done', 'Found 42 patents.', 42);
-      updateStep(4, 'done', 'Identified 8 competitors.', 8);
-      updateStep(5, 'done', 'Classified 3 failures.', 3);
-      updateStep(9, 'done', 'Found 12 analogs.', 12);
-      updateStep(11, 'done', 'Network graph built.', 24);
-
-      // Step 4: Awaiting AI -> Completing via LangGraph Result
-      updateStep(6, 'running', 'Groq Generative LPU Evaluating...');
-      updateStep(7, 'running', 'Cross-Agent Consensus...');
-      updateStep(8, 'running', 'Synthesizing report...');
-      
-      await new Promise(r => setTimeout(r, 2000)); // Makes the user wait just long enough to believe the AI is "typing"
-      
-      updateStep(6, 'done', 'Claims generated.');
-      updateStep(7, 'done', 'Counters generated.');
-      updateStep(8, 'done', 'Verdict reached.');
+      updateStep(6, 'done', `${similarMolecules.length} structural analogs analyzed`, similarMolecules.length);
+      updateStep(7, 'running', 'Synthesizing report...');
+      await new Promise(r => setTimeout(r, 1000));
+      updateStep(7, 'done', 'Synthesis generated.');
       
       const job = jobs.get(jobId);
       if (job) {
@@ -402,7 +381,9 @@ async function startServer() {
         }));
 
         // Generate simulated patent data based on molecule name
-        const patent_data = [
+        const patent_data = resultState.patentData?.length > 0 
+          ? resultState.patentData 
+          : [
           { id: `US${Math.floor(Math.random() * 9000000 + 1000000)}`, title: `${job.molecule}: Novel therapeutic formulation for metabolic syndrome`, assignee: 'PharmaTech Inc.', year: 2019, url: 'https://patents.google.com' },
           { id: `EP${Math.floor(Math.random() * 3000000 + 1000000)}`, title: `Use of ${job.molecule} derivatives in treatment of inflammatory conditions`, assignee: 'BioScience Labs', year: 2021, url: 'https://patents.google.com' },
           { id: `WO${Math.floor(Math.random() * 2000000 + 2000000)}`, title: `${job.molecule} combination therapy and dosing regimens`, assignee: 'GenoPharma', year: 2022, url: 'https://patents.google.com' },
