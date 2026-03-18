@@ -6,3 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+.venv/
+__pycache__/
+*.pyc
+kill-ports.md
+ref.txt

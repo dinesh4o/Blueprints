@@ -256,6 +256,7 @@ export default function ProgressPage() {
 
 
 
+
 import React, { useState, useRef } from 'react';
 import { Search, Activity, FileText, Sparkles, BrainCircuit, Send } from 'lucide-react';
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
@@ -463,5 +464,237 @@ export default function LandingPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+
+
+
+
+
+
+++++++
++++++++++
++++++
+++++
+
+
+
+
+
+
+
+
+import React, { useState, useRef } from 'react';
+import { MemoryRouter, Routes, Route, useNavigate } from 'react-router-dom';
+import { Search, Activity, FileText, Sparkles, BrainCircuit, Send } from 'lucide-react';
+import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
+
+const useAuth = () => ({ user: null });
+
+function LandingPage() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [isNavigating, setIsNavigating] = useState(false);
+  const sectionRef = useRef(null);
+
+  const { scrollYProgress } = useScroll({
+    target: sectionRef,
+    offset: ["start end", "start 10%"]
+  });
+
+  const y1 = useTransform(scrollYProgress, [0, 1], ["-125vh", "0vh"]);
+  const x1 = useTransform(scrollYProgress, [0, 1], ["-28vw", "0vw"]);
+  const rot1 = useTransform(scrollYProgress, [0, 1], [-12, 0]);
+  const scale1 = useTransform(scrollYProgress, [0, 1], [0.75, 1]);
+  const op1 = useTransform(scrollYProgress, [0, 1], [0.5, 1]);
+
+  const y2 = useTransform(scrollYProgress, [0, 1], ["-135vh", "0vh"]);
+  const x2 = useTransform(scrollYProgress, [0, 1], ["28vw", "0vw"]);
+  const rot2 = useTransform(scrollYProgress, [0, 1], [12, 0]);
+  const scale2 = useTransform(scrollYProgress, [0, 1], [0.75, 1]);
+  const op2 = useTransform(scrollYProgress, [0, 1], [0.5, 1]);
+
+  const y3 = useTransform(scrollYProgress, [0, 1], ["-70vh", "0vh"]);
+  const x3 = useTransform(scrollYProgress, [0, 1], ["-32vw", "0vw"]);
+  const rot3 = useTransform(scrollYProgress, [0, 1], [-8, 0]);
+  const scale3 = useTransform(scrollYProgress, [0, 1], [0.85, 1]);
+  const op3 = useTransform(scrollYProgress, [0, 1], [0.6, 1]);
+
+  const y4 = useTransform(scrollYProgress, [0, 1], ["-80vh", "0vh"]);
+  const x4 = useTransform(scrollYProgress, [0, 1], ["32vw", "0vw"]);
+  const rot4 = useTransform(scrollYProgress, [0, 1], [8, 0]);
+  const scale4 = useTransform(scrollYProgress, [0, 1], [0.85, 1]);
+  const op4 = useTransform(scrollYProgress, [0, 1], [0.6, 1]);
+
+  const handleStartAnalysis = () => {
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+    setIsNavigating(true);
+    setTimeout(() => {
+      navigate('/search');
+    }, 1500);
+  };
+
+  return (
+    <main className="bg-black text-[#ededed] font-sans selection:bg-[#333] relative overflow-hidden">
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:64px_64px] pointer-events-none mix-blend-overlay [mask-image:radial-gradient(ellipse_60%_60%_at_50%_50%,#000_10%,transparent_100%)]"></div>
+      
+      <AnimatePresence>
+        {isNavigating && (
+          <motion.div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.4, delay: 1.1 }}
+              className="absolute inset-0 bg-black z-40"
+            />
+            <motion.div
+              initial={{ x: "-50vw", y: "50vh", scale: 0.5, opacity: 0 }}
+              animate={{ x: 0, y: 0, scale: 1.5, opacity: 1 }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
+              className="relative z-50 flex items-center justify-center"
+            >
+              <motion.div
+                initial={{ x: 0, y: 0, rotate: 0 }}
+                animate={{ x: -300, y: -200, rotate: -45, opacity: 0 }}
+                transition={{ duration: 0.6, delay: 0.8, ease: "easeInOut" }}
+                style={{ clipPath: 'polygon(0 0, 50% 0, 50% 100%, 0 100%)' }}
+                className="absolute"
+              >
+                <Send className="w-24 h-24 text-[#888] drop-shadow-2xl" strokeWidth={1} fill="currentColor" />
+              </motion.div>
+              <motion.div
+                initial={{ x: 0, y: 0, rotate: 0 }}
+                animate={{ x: 300, y: 200, rotate: 45, opacity: 0 }}
+                transition={{ duration: 0.6, delay: 0.8, ease: "easeInOut" }}
+                style={{ clipPath: 'polygon(50% 0, 100% 0, 100% 100%, 50% 100%)' }}
+                className="absolute"
+              >
+                <Send className="w-24 h-24 text-[#888] drop-shadow-2xl" strokeWidth={1} fill="currentColor" />
+              </motion.div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="h-screen min-h-[700px] w-full flex flex-col items-center justify-center relative z-20 px-6 pointer-events-none">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
+          className="flex flex-col items-center text-center max-w-5xl pointer-events-auto"
+        >
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#111] border border-[#333] text-[#a1a1aa] text-xs font-medium tracking-wide mb-8 shadow-sm">
+            <Sparkles size={14} className="text-[#ededed]" />
+            NEXT-GEN DISCOVERY ENGINE
+          </div>
+          
+          <h1 className="text-5xl sm:text-6xl md:text-8xl font-bold tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-white to-[#888] leading-[1.1] mb-8 max-w-4xl">
+            Autonomous <br/>
+            Research Platform
+          </h1>
+          
+          <p className="text-lg md:text-xl text-[#888] max-w-2xl text-center mb-10 font-normal tracking-tight leading-relaxed">
+            Analyze clinical trials, literature, and regulatory data in seconds using advanced multi-agent orchestrations.
+          </p>
+          
+          <button
+            onClick={handleStartAnalysis}
+            className="h-12 px-8 text-sm tracking-wide font-medium bg-white text-black rounded-full transition-all duration-300 shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:scale-105 hover:bg-[#ededed] border border-transparent"
+          >
+            Start Analysis
+          </button>
+        </motion.div>
+      </div>
+
+      <div ref={sectionRef} className="min-h-screen py-32 w-full flex flex-col items-center justify-center relative z-10 px-4 md:px-8">
+        <motion.div
+          initial={{ opacity: 0, y: 50 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
+          viewport={{ once: true, margin: "-100px" }}
+          className="flex flex-col items-center text-center w-full mb-24"
+        >
+          <h2 className="text-3xl md:text-5xl font-bold text-white tracking-tight">Unified Intelligence</h2>
+          <p className="text-[#888] mt-4 text-base md:text-lg tracking-tight max-w-xl">Watch as scattered data points converge into a structured, actionable pipeline.</p>
+        </motion.div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-5xl">
+          <motion.div 
+            style={{ x: x1, y: y1, rotate: rot1, scale: scale1, opacity: op1 }}
+            className="w-full"
+          >
+            <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }} className="h-full">
+              <div className="bg-[#0a0a0a] border border-[#222] hover:border-[#444] p-8 rounded-2xl flex flex-col h-full transition-all duration-500 group">
+                <div className="p-3 bg-[#111] border border-[#333] rounded-xl w-fit mb-6 group-hover:scale-110 transition-transform duration-500">
+                  <Search className="text-[#ededed] w-5 h-5" />
+                </div>
+                <h3 className="text-lg font-semibold text-[#ededed] mb-2 tracking-tight">Instant Search</h3>
+                <p className="text-[#888] leading-relaxed text-sm tracking-tight">Query millions of data points instantly across global databases and private registries with deep semantic understanding.</p>
+              </div>
+            </motion.div>
+          </motion.div>
+
+          <motion.div 
+            style={{ x: x2, y: y2, rotate: rot2, scale: scale2, opacity: op2 }}
+            className="w-full"
+          >
+            <motion.div animate={{ y: [0, 10, 0] }} transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", delay: 1 }} className="h-full">
+              <div className="bg-[#0a0a0a] border border-[#222] hover:border-[#444] p-8 rounded-2xl flex flex-col h-full transition-all duration-500 group">
+                <div className="p-3 bg-[#111] border border-[#333] rounded-xl w-fit mb-6 group-hover:scale-110 transition-transform duration-500">
+                  <BrainCircuit className="text-[#ededed] w-5 h-5" />
+                </div>
+                <h3 className="text-lg font-semibold text-[#ededed] mb-2 tracking-tight">AI Synthesis</h3>
+                <p className="text-[#888] leading-relaxed text-sm tracking-tight">Multi-agent systems synthesize complex pharmacological papers and disparate data into actionable insights.</p>
+              </div>
+            </motion.div>
+          </motion.div>
+
+          <motion.div 
+            style={{ x: x3, y: y3, rotate: rot3, scale: scale3, opacity: op3 }}
+            className="w-full"
+          >
+            <motion.div animate={{ y: [0, -6, 0] }} transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut", delay: 2 }} className="h-full">
+              <div className="bg-[#0a0a0a] border border-[#222] hover:border-[#444] p-8 rounded-2xl flex flex-col h-full transition-all duration-500 group">
+                <div className="p-3 bg-[#111] border border-[#333] rounded-xl w-fit mb-6 group-hover:scale-110 transition-transform duration-500">
+                  <Activity className="text-[#ededed] w-5 h-5" />
+                </div>
+                <h3 className="text-lg font-semibold text-[#ededed] mb-2 tracking-tight">Real-time Data</h3>
+                <p className="text-[#888] leading-relaxed text-sm tracking-tight">Live tracking and dynamic monitoring of competitive clinical trials and shifting regulatory pathways.</p>
+              </div>
+            </motion.div>
+          </motion.div>
+
+          <motion.div 
+            style={{ x: x4, y: y4, rotate: rot4, scale: scale4, opacity: op4 }}
+            className="w-full"
+          >
+            <motion.div animate={{ y: [0, 8, 0] }} transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut", delay: 0.5 }} className="h-full">
+              <div className="bg-[#0a0a0a] border border-[#222] hover:border-[#444] p-8 rounded-2xl flex flex-col h-full transition-all duration-500 group">
+                <div className="p-3 bg-[#111] border border-[#333] rounded-xl w-fit mb-6 group-hover:scale-110 transition-transform duration-500">
+                  <FileText className="text-[#ededed] w-5 h-5" />
+                </div>
+                <h3 className="text-lg font-semibold text-[#ededed] mb-2 tracking-tight">Structured Reports</h3>
+                <p className="text-[#888] leading-relaxed text-sm tracking-tight">Automated generation of submission-ready evaluation reports, detailed target profiles, and viability scores.</p>
+              </div>
+            </motion.div>
+          </motion.div>
+
+        </div>
+      </div>
+    </main>
+  );
+}
+
+export default function App() {
+  return (
+    <MemoryRouter>
+      <Routes>
+        <Route path="*" element={<LandingPage />} />
+      </Routes>
+    </MemoryRouter>
   );
 }

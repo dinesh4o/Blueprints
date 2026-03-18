@@ -1,0 +1,1 @@
+{ "compilerOptions": { "esModuleInterop": true, "skipLibCheck": true, "strict": true, "target": "ES2018", "moduleResolution": "node", "module": "commonjs", "resolveJsonModule": true } }
