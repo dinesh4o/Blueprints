@@ -708,7 +708,7 @@ const ResearchPaperList = ({ data, setActiveSidebar }: { data: ResearchPaperData
 
 const HeroAlternativeMolecule = ({ cid }: { cid: number }) => {
   const [twin, setTwin] = useState<any>(null);
-  
+
   useEffect(() => {
     async function fetchTwin() {
       try {
@@ -729,14 +729,37 @@ const HeroAlternativeMolecule = ({ cid }: { cid: number }) => {
   if (!twin) return <p className="text-sm text-zinc-600 italic">Locating structural twin...</p>;
 
   return (
-    <>
-      <p className="text-xl font-medium text-zinc-100 truncate mb-1">
-        {twin.twinLabel}
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xl font-medium text-zinc-100">
+          {twin.twinLabel}
+        </p>
+        <Badge variant="default" className="text-[10px] uppercase tracking-wide bg-emerald-800/40 text-emerald-200 border-emerald-700/50">
+          Twin
+        </Badge>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-zinc-500 font-medium">CID:</span>
+        <span className="text-sm text-emerald-300 font-semibold">{twin.cid}</span>
+      </div>
+
+      <p className="text-sm text-zinc-400 leading-relaxed">
+         {twin.rationale || 'Identified as top 3D-similar candidate with shared core.'}
       </p>
-      <p className="text-sm text-zinc-400 line-clamp-2 leading-relaxed max-w-[90%]">
-         {twin.rationale || 'Identified as top 3D-similar candidate with shared core pharmacophore.'}
-      </p>
-    </>
+
+      <div className="flex flex-wrap gap-1.5 pt-1">
+        {twin.relationTypes.includes("similarity3d") && (
+          <Badge variant="outline" className="text-[10px] border-emerald-800/60 text-emerald-400 bg-emerald-950/30">3D Similar</Badge>
+        )}
+        {twin.relationTypes.includes("similarity") && (
+          <Badge variant="outline" className="text-[10px] border-emerald-800/60 text-emerald-400 bg-emerald-950/30">2D Similar</Badge>
+        )}
+        {twin.relationTypes.includes("substructure") && (
+          <Badge variant="outline" className="text-[10px] border-emerald-800/60 text-emerald-400 bg-emerald-950/30">Shared Core</Badge>
+        )}
+      </div>
+    </div>
   );
 };
 
@@ -774,89 +797,243 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
-        <div className="col-span-1 lg:col-span-8 bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-8 lg:p-10 relative overflow-hidden flex flex-col md:flex-row items-stretch justify-between gap-8 min-h-[440px]">
-          <div className="relative z-10 w-full md:w-1/2 flex flex-col justify-between">
-            <div>
-              <h1 className="text-4xl lg:text-5xl font-semibold text-zinc-100 mb-1 tracking-tight">{report.molecule}</h1>
-              <p className="text-zinc-500 text-xs mb-8 uppercase tracking-wide font-medium">Compound Overview</p>
-            </div>
-            <div className="grid grid-cols-2 gap-y-8 gap-x-6 mt-6">
-              <div className="border-l-2 border-zinc-800 pl-4">
-                <p className="text-2xl font-light text-zinc-100">
-                  {totalMarket > 0 ? `₹${(totalMarket * 83.5).toFixed(1)}B` : <span className="text-zinc-600 text-base italic">No market data</span>}
+        <div className="col-span-1 lg:col-span-8 bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-6 relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-emerald-500/5 pointer-events-none" />
+
+          {/* Header Section */}
+          <div className="relative z-10 mb-6">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h1 className="text-3xl lg:text-4xl font-bold text-zinc-100 mb-2 tracking-tight">{report.molecule}</h1>
+                <p className="text-zinc-400 text-sm uppercase tracking-wider font-medium flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                  Compound Overview
                 </p>
-                <p className="text-xs text-zinc-400 mt-1 uppercase tracking-wide">Total Addressable Market</p>
               </div>
-              <div className="border-l-2 border-zinc-800 pl-4">
-                {phoenixScore != null ? (
-                  <p className="text-2xl font-light text-zinc-100">
-                    {phoenixScore.toFixed(1)}<span className="text-base text-zinc-600 font-normal">/10</span>
-                  </p>
-                ) : (
-                  <p className="text-base text-zinc-600 italic">Computing…</p>
-                )}
-                <p className="text-xs text-zinc-400 mt-1 uppercase tracking-wide">Phoenix Score</p>
-              </div>
-
-              {((report.repurposing_candidates || []).length > 0) && (
-                <div className="border-l-2 border-indigo-500/50 pl-4 col-span-2 pt-1 border-t-0 mt-2">
-                  <p className="text-xl font-medium text-zinc-100 mb-1.5">
-                    {(report.repurposing_candidates || [])[0].condition}
-                  </p>
-                  <div className="flex items-center gap-3">
-                     <span className="text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide ring-1 ring-indigo-500/20">{(report.repurposing_candidates || [])[0].max_phase}</span>
-                     {((report.repurposing_candidates || [])[0].market_size_usd_billion || 0) > 0 && (
-                       <span className="text-zinc-400 text-sm">${((report.repurposing_candidates || [])[0].market_size_usd_billion || 0).toFixed(1)}B Market</span>
-                     )}
-                  </div>
-                  <p className="text-xs text-indigo-400 mt-3 uppercase tracking-wide font-medium">Top Repurposing Opportunity</p>
-                </div>
-              )}
-
               {report.pubchem_data?.cid && (
-                <div className="border-l-2 border-emerald-500/50 pl-4 col-span-2 pt-1 mt-2">
-                  <HeroAlternativeMolecule cid={report.pubchem_data.cid} />
-                  <p className="text-xs text-emerald-400 mt-3 uppercase tracking-wide font-medium">Primary Structural Twin</p>
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800/50 border border-zinc-700/50 rounded-lg">
+                  <span className="text-xs text-zinc-400 font-medium">CID:</span>
+                  <span className="text-sm text-zinc-100 font-semibold">{report.pubchem_data.cid}</span>
                 </div>
               )}
             </div>
           </div>
-          <div className="relative z-10 w-full md:w-1/2 flex flex-col items-center justify-center h-full">
-            <div className="flex w-full justify-between items-center mb-4">
-              <span className="text-xs text-zinc-400 uppercase tracking-wide font-semibold">Structure</span>
-              <div className="flex items-center bg-[#18181b] border border-[#27272a] rounded-lg p-0.5 gap-0.5 text-zinc-400">
-                <Button size="sm" variant={structureMode === '2d' ? 'secondary' : 'ghost'}
-                  className={clsx("h-6 px-2.5 text-xs gap-1", structureMode === '2d' ? "bg-zinc-800 text-zinc-100" : "")} onClick={() => setStructureMode('2d')}>
-                  <Atom size={11} /> 2D
-                </Button>
-                <Button size="sm" variant={structureMode === '3d' ? 'secondary' : 'ghost'}
-                  className={clsx("h-6 px-2.5 text-xs gap-1", structureMode === '3d' ? "bg-zinc-800 text-zinc-100" : "")} onClick={() => setStructureMode('3d')}>
-                  <Box size={11} /> 3D
-                </Button>
-              </div>
-            </div>
-            <div className="w-full aspect-square max-w-[340px] bg-black border border-[#27272a] rounded-full flex items-center justify-center relative shadow-inner overflow-hidden mx-auto">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.03)_0%,transparent_70%)] rounded-full"></div>
-              <div className="w-full h-full relative z-10 flex items-center justify-center">
-                <AnimatePresence mode="wait">
-                  {structureMode === '2d' ? (
-                    <motion.div key="2d" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
-                      className="w-full h-full flex justify-center items-center invert invert-[.8]">
-                      <AnimatedMolecule molecule={report.molecule || "O=C(C)Oc1ccccc1C(=O)O"} />
-                    </motion.div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 relative z-10">
+            {/* Left Column - Key Metrics */}
+            <div className="space-y-4">
+              {/* Market & Scores Row */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-zinc-950/60 border border-zinc-800/60 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Market Size</p>
+                  </div>
+                  <p className="text-xl font-bold text-zinc-100">
+                    {totalMarket > 0 ? `₹${(totalMarket * 83.5).toFixed(1)}B` : <span className="text-zinc-600 text-sm">N/A</span>}
+                  </p>
+                </div>
+
+                <div className="bg-zinc-950/60 border border-zinc-800/60 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <TrendingUp className="w-3.5 h-3.5 text-indigo-400" />
+                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Phoenix Score</p>
+                  </div>
+                  {phoenixScore != null ? (
+                    <p className="text-xl font-bold text-zinc-100">
+                      {phoenixScore.toFixed(1)}<span className="text-sm text-zinc-600 font-normal">/10</span>
+                    </p>
                   ) : (
-                    <motion.div key="3d" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
-                      className="w-full h-full flex justify-center items-center">
-                      {report.pubchem_data?.cid ? (
-                        <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center">
-                          <AnimatedMolecule3D cid={report.pubchem_data.cid} height={250} />
-                        </div>
-                      ) : (
-                        <span className="text-zinc-600 text-sm">3D Not Available</span>
-                      )}
-                    </motion.div>
+                    <p className="text-sm text-zinc-600">Computing…</p>
                   )}
-                </AnimatePresence>
+                </div>
+              </div>
+
+              {/* Compound Properties */}
+              <div className="bg-zinc-950/60 border border-zinc-800/60 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Beaker className="w-3.5 h-3.5 text-zinc-400" />
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Molecular Properties</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {report.pubchem_data?.molecular_weight && (
+                    <div>
+                      <p className="text-xs text-zinc-500 mb-1">Mol. Weight</p>
+                      <p className="text-sm font-semibold text-zinc-200">{Number(report.pubchem_data.molecular_weight).toFixed(2)} g/mol</p>
+                    </div>
+                  )}
+                  {report.pubchem_data?.xlogp != null && (
+                    <div>
+                      <p className="text-xs text-zinc-500 mb-1">LogP</p>
+                      <p className="text-sm font-semibold text-zinc-200">{report.pubchem_data.xlogp}</p>
+                    </div>
+                  )}
+                  {report.pubchem_data?.hbd != null && (
+                    <div>
+                      <p className="text-xs text-zinc-500 mb-1">H-Donors</p>
+                      <p className="text-sm font-semibold text-zinc-200">{report.pubchem_data.hbd}</p>
+                    </div>
+                  )}
+                  {report.pubchem_data?.hba != null && (
+                    <div>
+                      <p className="text-xs text-zinc-500 mb-1">H-Acceptors</p>
+                      <p className="text-sm font-semibold text-zinc-200">{report.pubchem_data.hba}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Top Opportunity */}
+              {((report.repurposing_candidates || []).length > 0) && (
+                <div className="bg-gradient-to-br from-indigo-950/40 to-indigo-900/20 border border-indigo-800/40 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Target className="w-3.5 h-3.5 text-indigo-400" />
+                    <p className="text-[10px] text-indigo-400 uppercase tracking-wider font-semibold">Top Opportunity</p>
+                  </div>
+                  <p className="text-base font-semibold text-zinc-100 mb-2">
+                    {(report.repurposing_candidates || [])[0].condition}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-indigo-300 bg-indigo-500/20 px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide border border-indigo-500/30">
+                      {(report.repurposing_candidates || [])[0].max_phase}
+                    </span>
+                    {((report.repurposing_candidates || [])[0].market_size_usd_billion || 0) > 0 && (
+                      <span className="text-zinc-400 text-xs">${((report.repurposing_candidates || [])[0].market_size_usd_billion || 0).toFixed(1)}B Market</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Clinical Trials Summary */}
+              {(report.clinical_data && report.clinical_data.length > 0) && (
+                <div className="bg-gradient-to-br from-emerald-950/40 to-emerald-900/20 border border-emerald-800/40 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Activity className="w-3.5 h-3.5 text-emerald-400" />
+                    <p className="text-[10px] text-emerald-400 uppercase tracking-wider font-semibold">Clinical Evidence</p>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-zinc-400">Total Trials</span>
+                      <span className="text-lg font-bold text-zinc-100">{report.clinical_data.length}</span>
+                    </div>
+                    {report.clinical_data.slice(0, 2).map((trial: any, idx: number) => (
+                      <div key={idx} className="pt-2 border-t border-emerald-800/30">
+                        <p className="text-xs text-zinc-300 font-medium mb-1">{trial.condition || 'Unknown Condition'}</p>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-[9px] border-emerald-700/50 text-emerald-300 bg-emerald-950/30">
+                            {trial.phase || 'N/A'}
+                          </Badge>
+                          <span className="text-[10px] text-zinc-500">{trial.status || 'Status unknown'}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Right Column - Structure Visualization */}
+            <div className="flex flex-col">
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-xs text-zinc-400 uppercase tracking-wider font-semibold">3D Structure</span>
+                <div className="flex items-center bg-[#18181b] border border-[#27272a] rounded-lg p-0.5 gap-0.5">
+                  <Button size="sm" variant={structureMode === '2d' ? 'secondary' : 'ghost'}
+                    className={clsx("h-6 px-2.5 text-xs gap-1", structureMode === '2d' ? "bg-zinc-800 text-zinc-100" : "")} onClick={() => setStructureMode('2d')}>
+                    <Atom size={11} /> 2D
+                  </Button>
+                  <Button size="sm" variant={structureMode === '3d' ? 'secondary' : 'ghost'}
+                    className={clsx("h-6 px-2.5 text-xs gap-1", structureMode === '3d' ? "bg-zinc-800 text-zinc-100" : "")} onClick={() => setStructureMode('3d')}>
+                    <Box size={11} /> 3D
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex-1 bg-black border border-[#27272a] rounded-xl flex items-center justify-center relative shadow-inner overflow-hidden">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(99,102,241,0.08)_0%,transparent_70%)]"></div>
+                <div className="w-full h-full relative z-10 flex items-center justify-center p-8">
+                  <AnimatePresence mode="wait">
+                    {structureMode === '2d' ? (
+                      <motion.div key="2d" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
+                        className="w-full h-full flex justify-center items-center invert invert-[.8]">
+                        <AnimatedMolecule molecule={report.molecule || "O=C(C)Oc1ccccc1C(=O)O"} />
+                      </motion.div>
+                    ) : (
+                      <motion.div key="3d" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
+                        className="w-full h-full flex justify-center items-center">
+                        {report.pubchem_data?.cid ? (
+                          <AnimatedMolecule3D cid={report.pubchem_data.cid} height={300} />
+                        ) : (
+                          <span className="text-zinc-600 text-sm">3D Not Available</span>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+
+              {/* Enhanced Quick Stats & Additional Info */}
+              <div className="mt-3 space-y-3">
+                {/* Stats Row */}
+                {report.pubchem_data && (
+                  <div className="grid grid-cols-3 gap-2">
+                    {report.pubchem_data.rotatable_bonds != null && (
+                      <div className="bg-zinc-950/60 border border-zinc-800/60 rounded-lg p-2 text-center hover:border-zinc-700 transition-colors">
+                        <p className="text-lg font-bold text-zinc-100">{report.pubchem_data.rotatable_bonds}</p>
+                        <p className="text-[9px] text-zinc-500 uppercase tracking-wider">Rotatable</p>
+                      </div>
+                    )}
+                    {report.pubchem_data.complexity != null && (
+                      <div className="bg-zinc-950/60 border border-zinc-800/60 rounded-lg p-2 text-center hover:border-zinc-700 transition-colors">
+                        <p className="text-lg font-bold text-zinc-100">{Math.round(Number(report.pubchem_data.complexity))}</p>
+                        <p className="text-[9px] text-zinc-500 uppercase tracking-wider">Complexity</p>
+                      </div>
+                    )}
+                    <div className="bg-zinc-950/60 border border-zinc-800/60 rounded-lg p-2 text-center hover:border-emerald-700/50 transition-colors">
+                      <p className="text-lg font-bold text-emerald-400">{(report.clinical_data || []).length}</p>
+                      <p className="text-[9px] text-zinc-500 uppercase tracking-wider">Trials</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Drug Classes or Formula */}
+                {(report.pubchem_data?.drug_classes && report.pubchem_data.drug_classes.length > 0) ? (
+                  <div className="bg-gradient-to-br from-purple-950/30 to-purple-900/10 border border-purple-800/30 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Pill className="w-3 h-3 text-purple-400" />
+                      <p className="text-[10px] text-purple-400 uppercase tracking-wider font-semibold">Drug Classes</p>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {report.pubchem_data.drug_classes.slice(0, 3).map((drugClass: string, idx: number) => (
+                        <span key={idx} className="text-[10px] px-2 py-0.5 bg-purple-500/10 text-purple-300 border border-purple-500/20 rounded">
+                          {drugClass}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : report.pubchem_data?.molecular_formula ? (
+                  <div className="bg-gradient-to-br from-blue-950/30 to-blue-900/10 border border-blue-800/30 rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Atom className="w-3 h-3 text-blue-400" />
+                        <p className="text-[10px] text-blue-400 uppercase tracking-wider font-semibold">Formula</p>
+                      </div>
+                      <p className="text-sm font-mono text-zinc-200">{report.pubchem_data.molecular_formula}</p>
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Development Status if available */}
+                {(report.regulatory_data?.status || (report.repurposing_candidates || []).length > 0) && (
+                  <div className="bg-gradient-to-br from-amber-950/30 to-amber-900/10 border border-amber-800/30 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Activity className="w-3 h-3 text-amber-400" />
+                      <p className="text-[10px] text-amber-400 uppercase tracking-wider font-semibold">Development Status</p>
+                    </div>
+                    <p className="text-xs text-zinc-300">
+                      {report.regulatory_data?.status || `${(report.repurposing_candidates || []).length} repurposing opportunit${(report.repurposing_candidates || []).length === 1 ? 'y' : 'ies'} identified`}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -864,7 +1041,7 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
 
         <div className="col-span-1 lg:col-span-4 flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-3 flex-none">
-            <GaugeScore title="Viability Score" score={viabilityScore} max={10} subtitle="LLM-computed" />
+            <GaugeScore title="Viability Score" score={viabilityScore} max={10} subtitle="" />
             <GaugeScore title="Phoenix Score" score={phoenixScore} max={10} subtitle="Data pipeline" />
           </div>
           <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-6 flex-1">

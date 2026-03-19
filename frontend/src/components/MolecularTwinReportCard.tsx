@@ -10,13 +10,11 @@ import {
   get3DSimilarityNeighbors,
   aggregateNeighbors,
   selectMolecularTwin,
-  MolecularTwin,
-  CombinedNeighbor
+  MolecularTwin
 } from "@/lib/pubchem";
 
 export function MolecularTwinReportCard({ cid, onReferenceClick }: { cid: number, onReferenceClick?: (refId: string) => void }) {
   const [twin, setTwin] = useState<MolecularTwin | null>(null);
-  const [others, setOthers] = useState<CombinedNeighbor[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -37,14 +35,7 @@ export function MolecularTwinReportCard({ cid, onReferenceClick }: { cid: number
         const combined = aggregateNeighbors(sim2d, sub, superstruct, sim3d);
         const bestTwin = selectMolecularTwin(combined, cid);
         setTwin(bestTwin);
-        
-        const other3d = combined.filter(c => 
-          c.cid !== cid && 
-          c.relationTypes.includes("similarity3d") && 
-          (!bestTwin || c.cid !== bestTwin.cid)
-        ).slice(0, 3);
-        setOthers(other3d);
-        
+
       } catch (err) {
         console.error("Failed to fetch Molecular Twin", err);
       } finally {
@@ -108,24 +99,6 @@ export function MolecularTwinReportCard({ cid, onReferenceClick }: { cid: number
             <Badge variant="outline" className="text-[10px] border-zinc-800 text-zinc-400">Shared Core</Badge>
           )}
         </div>
-        
-        {others.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-zinc-800/50">
-            <p className="text-xs text-zinc-500 mb-2 uppercase tracking-wider font-semibold">Other 3D-Similar Molecules</p>
-            <div className="flex flex-wrap gap-2">
-              {others.slice(0, 3).map(o => (
-                <button
-                  type="button"
-                  key={o.cid} 
-                  onClick={() => onReferenceClick?.(`PUBCHEM-${o.cid}`)}
-                  className="text-xs bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 hover:border-zinc-700 text-zinc-300 px-2 py-1 rounded transition-colors"
-                >
-                  CID: {o.cid}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </CardContent>
     </Card>
   );
