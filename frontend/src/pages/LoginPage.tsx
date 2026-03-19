@@ -40,9 +40,11 @@ export function LoginPage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6 relative w-full min-h-screen overflow-hidden">
+    <main className="bg-[#f8fafc] dark:bg-[#000000] text-zinc-900 dark:text-[#ededed] font-sans selection:bg-zinc-200 dark:selection:bg-zinc-800 relative overflow-x-hidden min-h-screen flex flex-col items-center justify-center p-6">
+      {/* Fixed background grid */}
+      <div className="fixed inset-0 bg-[linear-gradient(rgba(0,0,0,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.025)_1px,transparent_1px)] dark:bg-[linear-gradient(rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.025)_1px,transparent_1px)] bg-[size:64px_64px] pointer-events-none [mask-image:radial-gradient(ellipse_90%_70%_at_50%_30%,#000_10%,transparent_100%)] z-0" />
 
-      {/* Same floating background elements as LandingPage */}
+      {/* Floating background elements */}
       <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
         <motion.div
           animate={{ y: [0, -20, 0], rotate: [0, 5, -5, 0] }}
@@ -213,6 +215,6 @@ export function LoginPage() {
           </p>
         </div>
       </motion.div>
-    </div>
+    </main>
   );
 }

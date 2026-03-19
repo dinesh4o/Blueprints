@@ -52,15 +52,15 @@ const SERVER_TO_UI: Record<string, number> = {
 };
 
 const UI_STEPS = [
-  { query: 'Clinical',                 serverName: 'ClinicalAgent',   log: 'Executing fetchClinicalData: Retrieving historical clinical trial data and adverse events...', fetchingText: 'Fetching ClinicalTrials.gov...' },
-  { query: 'Patent',                   serverName: 'PatentAgent',     log: 'Executing fetchPatentData: Scanning intellectual property and exclusivity timelines...', fetchingText: 'Searching USPTO...' },
-  { query: 'Literature',               serverName: 'LiteratureAgent', log: 'Executing fetchLiteratureData: Extracting mechanistic pathways from PubMed corpus...', fetchingText: 'Searching PubMed...' },
-  { query: 'Regulatory',               serverName: 'RegulatoryAgent', log: 'Executing fetchRegulatoryData: Cross-referencing FDA/EMA approval trajectories...', fetchingText: 'Querying FDA/EMA...' },
-  { query: 'Target',                   serverName: 'TargetAgent',     log: 'Executing fetchTargetData: Identifying primary and secondary protein targets...', fetchingText: 'Scanning ChEMBL...' },
-  { query: 'PubChem',                  serverName: 'PubChemAgent',    log: 'Executing fetchPubChemData: Retrieving physicochemical properties and assay results...', fetchingText: 'Querying PubChem...' },
-  { query: 'Analog',                   serverName: 'AnalogAgent',     log: 'Executing fetchSimilarMolecules: Computing Tanimoto scores against active compounds...', fetchingText: 'Searching Zinc15...' },
-  { query: 'Synthesis',                serverName: 'SynthesisAgent',  log: 'Executing synthesizeData: Aggregating agent outputs into structured knowledge base...', fetchingText: 'Synthesizing...' },
-  { query: 'Advocate & Skeptic',       serverName: null,              log: 'Debate Node: Advocate agent highlights efficacy metrics while Skeptic flags mitochondrial toxicity risks.', fetchingText: 'Debating viability...' },
+  { query: 'Clinical',                 serverName: 'ClinicalAgent',   log: 'Executing fetchClinicalData: Retrieving historical clinical trial data and adverse events...', fetchingText: 'Fetching ClinicalTrials.gov...', color: '#60a5fa' },
+  { query: 'Patent',                   serverName: 'PatentAgent',     log: 'Executing fetchPatentData: Scanning intellectual property and exclusivity timelines...', fetchingText: 'Searching USPTO...', color: '#c084fc' },
+  { query: 'Literature',               serverName: 'LiteratureAgent', log: 'Executing fetchLiteratureData: Extracting mechanistic pathways from PubMed corpus...', fetchingText: 'Searching PubMed...', color: '#fcd34d' },
+  { query: 'Regulatory',               serverName: 'RegulatoryAgent', log: 'Executing fetchRegulatoryData: Cross-referencing FDA/EMA approval trajectories...', fetchingText: 'Querying FDA/EMA...', color: '#4ade80' },
+  { query: 'Target',                   serverName: 'TargetAgent',     log: 'Executing fetchTargetData: Identifying primary and secondary protein targets...', fetchingText: 'Scanning ChEMBL...', color: '#f87171' },
+  { query: 'PubChem',                  serverName: 'PubChemAgent',    log: 'Executing fetchPubChemData: Retrieving physicochemical properties and assay results...', fetchingText: 'Querying PubChem...', color: '#fb923c' },
+  { query: 'Analog',                   serverName: 'AnalogAgent',     log: 'Executing fetchSimilarMolecules: Computing Tanimoto scores against active compounds...', fetchingText: 'Searching Zinc15...', color: '#2dd4bf' },
+  { query: 'Synthesis',                serverName: 'SynthesisAgent',  log: 'Executing synthesizeData: Aggregating agent outputs into structured knowledge base...', fetchingText: 'Synthesizing...', color: '#e879f9' },
+  { query: 'Advocate & Skeptic',       serverName: null,              log: 'Debate Node: Advocate agent highlights efficacy metrics while Skeptic flags mitochondrial toxicity risks.', fetchingText: 'Debating viability...', color: '#94a3b8' },
 ];
 
 export default function ProgressPage() {
@@ -72,6 +72,7 @@ export default function ProgressPage() {
   const [targetStepIndex, setTargetStepIndex] = useState(0);
   const [isProcessingAi, setIsProcessingAi] = useState(false);
   const [debateData, setDebateData] = useState<{ advocate: string[], skeptic: string[] } | null>(null);
+  const [useColor, setUseColor] = useState(true);
 
   const isDataPhase  = activeStepIndex < 8;
   const isDebatePhase = activeStepIndex === 8;
@@ -286,7 +287,9 @@ export default function ProgressPage() {
   const currentStep = UI_STEPS[activeStepIndex];
 
   return (
-    <div className="min-h-screen bg-[#000000] text-zinc-300 font-mono flex flex-col items-center justify-center relative overflow-hidden">
+    <div className="min-h-screen bg-[#000000] text-zinc-200 font-sans flex flex-col items-center justify-center relative overflow-hidden">
+      {/* Background grid */}
+      <div className="fixed inset-0 bg-[linear-gradient(rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.025)_1px,transparent_1px)] bg-[size:64px_64px] pointer-events-none [mask-image:radial-gradient(ellipse_90%_70%_at_50%_30%,#000_10%,transparent_100%)]" />
       <style>{`
         @keyframes pulseGlow {
           0%, 100% { filter: drop-shadow(0 0 10px currentColor); }
@@ -306,18 +309,25 @@ export default function ProgressPage() {
       `}</style>
 
       {/* Header */}
-      <header className="absolute top-0 w-full p-8 flex justify-between items-center z-50">
+      <header className="absolute top-0 w-full px-8 py-6 flex justify-between items-center z-50">
         <div className="flex flex-col">
-          <div className="text-zinc-100 font-medium tracking-widest text-sm">LANGGRAPH PIPELINE</div>
-          <div className="text-zinc-500 text-[10px] tracking-widest uppercase mt-1">
+          <div className="text-zinc-100 font-semibold text-sm tracking-tight">Blueprints Pipeline</div>
+          <div className="text-zinc-500 text-xs mt-0.5 flex items-center gap-3">
             {job?.molecule ? `Analyzing ${job.molecule}` : 'Multi-Agent Orchestration'}
+            <button 
+              onClick={() => setUseColor(!useColor)} 
+              className={`px-2 py-0.5 rounded border text-[11px] transition-colors ${useColor ? 'border-zinc-600 text-zinc-300' : 'border-zinc-800 text-zinc-600'}`}
+              title="Toggle Agent Colors"
+            >
+              Color {useColor ? 'on' : 'off'}
+            </button>
           </div>
         </div>
-        <div className="flex flex-col items-end gap-2 w-56">
-          <div className="text-xs text-zinc-400 tracking-wider">{progressPercent}% COMPLETE</div>
-          <div className="w-full h-1 bg-zinc-900 rounded-full overflow-hidden">
+        <div className="flex flex-col items-end gap-2 w-52">
+          <div className="text-xs text-zinc-400 font-medium">{progressPercent}% complete</div>
+          <div className="w-full h-0.5 bg-zinc-900 rounded-full overflow-hidden">
             <div
-              className="h-full transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] bg-zinc-300"
+              className="h-full transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] bg-indigo-500"
               style={{ width: `${progressPercent}%` }}
             />
           </div>
@@ -358,8 +368,8 @@ export default function ProgressPage() {
 
           {/* Supervisor bot at top */}
           <div className="absolute top-[30px] flex flex-col items-center">
-            <BotIcon color="#71717a" active={isDataPhase} size={130} />
-            <div className="mt-4 border border-zinc-800 bg-[#000000] px-4 py-1.5 rounded-full text-[10px] tracking-widest text-zinc-400 uppercase shadow-lg">
+            <BotIcon color={useColor ? '#818cf8' : '#71717a'} active={isDataPhase} size={130} />
+            <div className="mt-4 border border-zinc-800/80 bg-zinc-950 px-4 py-1.5 rounded-full text-xs text-zinc-400 font-medium shadow-lg tracking-wide">
               Supervisor
             </div>
           </div>
@@ -385,16 +395,20 @@ export default function ProgressPage() {
                 }}
               >
                 <BotIcon
-                  color={isCurrent ? '#ffffff' : isDone ? '#52525b' : '#71717a'}
+                  color={
+                    useColor
+                      ? (isCurrent ? step.color : isDone ? '#52525b' : '#3f3f46')
+                      : (isCurrent ? '#ffffff' : isDone ? '#52525b' : '#71717a')
+                  }
                   active={isCurrent}
                   size={isCurrent ? 90 : 70}
                 />
                 <div
-                  className="mt-6 border px-5 py-2 rounded-full text-[11px] tracking-widest uppercase shadow-2xl transition-all duration-700"
+                  className="mt-6 border px-5 py-2 rounded-lg text-xs font-medium shadow-xl transition-all duration-700"
                   style={{
-                    borderColor: isCurrent ? '#52525b' : '#27272a',
-                    backgroundColor: isCurrent ? '#18181b' : '#000000',
-                    color: isCurrent ? '#ffffff' : '#a1a1aa',
+                    borderColor: isCurrent ? (useColor ? step.color : '#6366f1') : '#27272a',
+                    backgroundColor: isCurrent ? '#18181b' : '#09090b',
+                    color: isCurrent ? (useColor ? step.color : '#e4e4e7') : '#71717a',
                   }}
                 >
                   {step.query}
@@ -409,16 +423,24 @@ export default function ProgressPage() {
 
           {/* Advocate */}
           <div className={`absolute top-[280px] left-[200px] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center transition-all duration-1000 opacity-100`}>
-            <BotIcon color="#e4e4e7" active={isDebatePhase} size={110} />
-            <div className="mt-6 border border-zinc-700 bg-zinc-900 px-6 py-2 rounded-full text-[11px] tracking-widest text-zinc-200 uppercase shadow-lg">Advocate</div>
+            <BotIcon color={useColor ? '#4ade80' : '#e4e4e7'} active={isDebatePhase} size={110} />
+            <div 
+              className="mt-6 border bg-zinc-900/70 px-6 py-2 rounded-lg text-xs font-medium shadow-lg"
+              style={{
+                borderColor: useColor ? '#22c55e' : '#4f4f56',
+                color: useColor ? '#86efac' : '#e4e4e7'
+              }}
+            >
+              Advocate
+            </div>
             {isDebatePhase && (
               <div className="mt-6 w-[320px] flex flex-col gap-3">
                 {(debateData?.advocate || [
                   "High viability due to positive historical safety metrics.",
                   "Strong regulatory precedent for structural analogs."
                 ]).map((point, idx) => (
-                  <div key={`adv-${idx}`} className="argue-bubble bg-[#09090b] border border-zinc-800 rounded-lg p-4 text-[12px] text-zinc-300 shadow-xl" style={{ animationDelay: `${0.8 + (idx * 2)}s` }}>
-                    <span className="text-zinc-100 font-semibold block mb-1">Advocate:</span>
+                  <div key={`adv-${idx}`} className="argue-bubble bg-zinc-950/90 border border-zinc-800/80 rounded-lg p-4 text-sm text-zinc-300 shadow-xl" style={{ animationDelay: `${0.8 + (idx * 2)}s` }}>
+                    <span className="font-semibold block mb-1" style={{ color: useColor ? '#4ade80' : '#f4f4f5' }}>Advocate:</span>
                     {point}
                   </div>
                 ))}
@@ -433,16 +455,24 @@ export default function ProgressPage() {
 
           {/* Skeptic */}
           <div className={`absolute top-[280px] left-[800px] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center transition-all duration-1000 opacity-100`}>
-            <BotIcon color="#a1a1aa" active={isDebatePhase} size={110} flipped />
-            <div className="mt-6 border border-zinc-800 bg-zinc-950 px-6 py-2 rounded-full text-[11px] tracking-widest text-zinc-400 uppercase shadow-lg">Skeptic</div>
+            <BotIcon color={useColor ? '#f87171' : '#a1a1aa'} active={isDebatePhase} size={110} flipped />
+            <div 
+              className="mt-6 border bg-zinc-950/70 px-6 py-2 rounded-lg text-xs font-medium shadow-lg"
+              style={{
+                borderColor: useColor ? '#ef4444' : '#3f3f46',
+                color: useColor ? '#fca5a5' : '#a1a1aa'
+              }}
+            >
+              Skeptic
+            </div>
             {isDebatePhase && (
               <div className="mt-6 w-[320px] flex flex-col gap-3">
                 {(debateData?.skeptic || [
                   "Weak target binding affinities reported offline.",
                   "Highly saturated market with generic alternatives heavily suppressing growth."
                 ]).map((point, idx) => (
-                  <div key={`skep-${idx}`} className="argue-bubble bg-[#09090b] border border-zinc-800 rounded-lg p-4 text-[12px] text-zinc-300 shadow-xl" style={{ animationDelay: `${1.8 + (idx * 2)}s` }}>
-                    <span className="text-zinc-400 font-semibold block mb-1">Skeptic:</span>
+                  <div key={`skep-${idx}`} className="argue-bubble bg-zinc-950/90 border border-zinc-800/80 rounded-lg p-4 text-sm text-zinc-300 shadow-xl" style={{ animationDelay: `${1.8 + (idx * 2)}s` }}>
+                    <span className="font-semibold block mb-1" style={{ color: useColor ? '#f87171' : '#a1a1aa' }}>Skeptic:</span>
                     {point}
                   </div>
                 ))}
@@ -453,20 +483,20 @@ export default function ProgressPage() {
       </div>
 
       {/* Bottom left log panel */}
-      <div className="absolute top-1/2 -translate-y-1/2 left-8 w-full max-w-sm flex flex-col gap-4 px-8 z-50">
+      <div className="absolute top-1/2 -translate-y-1/2 left-8 w-full max-w-sm flex flex-col gap-3 px-8 z-50">
         <div
           key={`header-${activeStepIndex}`}
-          className="border border-zinc-800 bg-[#09090b] rounded-lg px-5 py-3 flex items-center gap-4 self-start shadow-2xl animate-in slide-in-from-bottom-2 fade-in duration-500"
+          className="border border-zinc-800/80 bg-zinc-950 rounded-lg px-4 py-2.5 flex items-center gap-3 self-start shadow-xl animate-in slide-in-from-bottom-2 fade-in duration-500"
         >
-          <Sparkles size={16} className="text-zinc-400" />
-          <span className="text-[13px] font-medium tracking-wide text-zinc-200">{currentStep.query}</span>
+          <Sparkles size={14} className="text-indigo-400" />
+          <span className="text-sm font-medium text-zinc-100">{currentStep.query}</span>
         </div>
 
         <div
           key={`body-${activeStepIndex}`}
-          className="border rounded-xl p-6 w-full shadow-2xl bg-[#000000]/90 backdrop-blur-xl animate-in slide-in-from-bottom-4 fade-in duration-700 border-zinc-800"
+          className="border border-zinc-800/60 rounded-xl p-5 w-full shadow-xl bg-zinc-950/80 backdrop-blur-xl animate-in slide-in-from-bottom-4 fade-in duration-700"
         >
-          <p className="text-[15px] leading-relaxed tracking-wide font-mono text-zinc-300">
+          <p className="text-sm leading-relaxed font-mono text-zinc-400">
             {getDynamicLog(activeStepIndex, job?.molecule || 'Compound')}
           </p>
         </div>

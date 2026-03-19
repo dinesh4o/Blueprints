@@ -16,8 +16,11 @@ from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_openai import ChatOpenAI
 import json
+from phoenix.router import router as phoenix_router
 
 app = FastAPI(title="Ephemeral RAG Server")
+
+app.include_router(phoenix_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -54,9 +57,11 @@ def get_llm():
         print("Warning: GROQ_API_KEY not set")
     
     return ChatOpenAI(
-        base_url="https://api.groq.com/openai/v1",
+        # base_url="https://api.groq.com/openai/v1",
+        base_url="http://172.28.30.240:8080/v1",
         api_key=groq_key or "no-key",
-        model="llama-3.3-70b-versatile",
+        # model="llama-3.3-70b-versatile",
+        model="qwen2.5-coder-7b-instruct",
         temperature=0.0
     )
 
@@ -108,10 +113,11 @@ async def chat(req: ChatRequest):
         context = "\n\n".join([d.page_content for d in docs])
         
         # Call LLM directly to avoid legacy pydantic issues in langchain.chains
-        prompt = f"""You are a top-tier scientific AI analyzing a clinical report on a medical compound. report.
+        prompt = f"""You are a top-tier strict scientific AI analyzing a clinical report on a medical compound.
 Answer the following question based ONLY on the provided report context.
-Analyze the provided report context to answer the user's question. Read between the lines, infer relationships from nested data, and provide the most intelligent scientific and logical deduction possible. Do NOT just say "I don't know." Give an educated clinical synthesis. 
-Keep your answer concise and easy to read.
+You MUST REFUSE to answer any questions about computer programming, code loops (e.g., Python, C++, Java), or general topics outside the scope of this medical report.
+If a user submits code or an out-of-domain question, reply EXACTLY with "Not available in report data."
+For valid clinical questions, analyze the context and provide an intelligent scientific deduction. Do NOT hallucinate.
 
 Context: {context}
 

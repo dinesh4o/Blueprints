@@ -1,4 +1,4 @@
-import { Moon, Sun, Settings, LogOut, UserCircle } from "lucide-react"
+import { Settings, LogOut, UserCircle } from "lucide-react"
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 
@@ -10,11 +10,9 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
-import { useTheme } from "@/components/theme-provider"
 import { useAuth } from "@/contexts/AuthContext"
 
 export function ModeToggle() {
-  const { setTheme } = useTheme()
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [avatarError, setAvatarError] = useState(false)
@@ -78,24 +76,6 @@ export function ModeToggle() {
               </>
             )}
 
-            {/* Theme section */}
-            <p className="px-2 py-1.5 text-sm font-semibold text-foreground">Settings</p>
-            <DropdownMenuSeparator className="bg-border/50" />
-            <div className="p-2 space-y-1">
-              <span className="text-xs text-muted-foreground px-2 font-medium mb-2 block">Theme</span>
-              <DropdownMenuItem onClick={() => setTheme("light")} className="rounded-lg cursor-pointer">
-                <Sun className="mr-2 h-4 w-4" />
-                <span>Light</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setTheme("dark")} className="rounded-lg cursor-pointer">
-                <Moon className="mr-2 h-4 w-4" />
-                <span>Dark</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setTheme("system")} className="rounded-lg cursor-pointer">
-                <Settings className="mr-2 h-4 w-4" />
-                <span>System</span>
-              </DropdownMenuItem>
-            </div>
 
             {user && (
               <>

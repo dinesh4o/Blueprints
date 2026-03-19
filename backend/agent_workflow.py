@@ -113,9 +113,10 @@ def synthesize_and_evaluate(state: GraphState):
     print(f"[JudgeAgent] Synthesizing data for {molecule}...")
     
     GROQ_API_KEY = os.getenv("GROQ_API_KEY", "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")
-    GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+    # GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+    GROQ_API_URL = "http://172.28.30.240:8080/v1/chat/completions"
 
-    
+
     prompt = f"""
     You are an expert Clinical Scientist and Patent Analyst Evaluation Agent.
     Evaluate the viability of the molecule "{molecule}".
@@ -132,12 +133,13 @@ def synthesize_and_evaluate(state: GraphState):
     """
     
     payload = {
-        "model": "llama-3.3-70b-versatile",
+        # "model": "llama-3.3-70b-versatile",
+        "model": "qwen2.5-coder-7b-instruct",
         "messages": [
             {"role": "system", "content": "You only respond with perfectly formatted JSON. Do not return anything outside the JSON object. Must be valid JSON."},
             {"role": "user", "content": prompt}
         ],
-        "response_format": {"type": "json_object"}
+        # "response_format": {"type": "json_object"}
     }
 
     try:

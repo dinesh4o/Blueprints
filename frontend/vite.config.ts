@@ -27,7 +27,7 @@ export default defineConfig(({mode}) => {
       }
     },
     optimizeDeps: {
-      exclude: ['@langchain/langgraph', '@langchain/core', '@langchain/google-genai', 'chromadb', 'better-sqlite3', '@xenova/transformers'],
+      exclude: ['@langchain/langgraph', '@langchain/core', '@langchain/google-genai', 'chromadb', 'better-sqlite3', '@xenova/transformers', 'html2pdf.js'],
       include: ['lucide-react', 'recharts', 'framer-motion', 'clsx', 'tailwind-merge', 'axios', 'react-router-dom', 'd3']
     }
   };
