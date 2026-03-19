@@ -4,7 +4,7 @@ import {
   Database, ChevronRight, Search, Download, LayoutGrid, List, Activity, X, Play, Gavel, Bot, ShieldAlert, Scale,
   MessageCircle, ExternalLink, Atom, Box, CheckCircle, TrendingUp, Target, Pill, Zap, Clock, Droplets, GitCompare,
   User, Send, Loader2, BookOpen, ArrowLeft, FlaskConical, DollarSign, FileText, Beaker, Fingerprint, Network,
-  BarChart3, PieChart, LineChart, ChevronDown, Sparkles
+  BarChart3, PieChart as PieChartIcon, LineChart as LineChartIcon, ChevronDown, Sparkles, AlertTriangle
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -12,7 +12,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar, CartesianGrid, XAxis, YAxis, Tooltip as RechartsLineTooltip, LineChart, Line } from 'recharts';
+import { Badge } from "@/components/ui/badge";
+import { getSimilarityNeighbors, getSubstructureNeighbors, getSuperstructureNeighbors, get3DSimilarityNeighbors, aggregateNeighbors, selectMolecularTwin } from "@/lib/pubchem";
 import AnimatedMolecule from '@/components/AnimatedMolecule';
 import AnimatedMolecule3D from '@/components/AnimatedMolecule3D';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -20,36 +22,61 @@ import { MolecularTwinReportCard } from '@/components/MolecularTwinReportCard';
 import { RepurposingAlternativeFinder } from '@/components/RepurposingAlternativeFinder';
 import { SourceBadge } from '@/components/SourceBadge';
 import { AISynthesisTab } from './AISynthesisPage';
+import ReactMarkdown from 'react-markdown';
+import { exportResearchPaper } from '@/lib/ResearchPaperExport';
 
 type Tab = 'overview' | 'science' | 'market' | 'twin' | 'synthesis';
 
 interface GaugeScoreProps {
   title: string;
-  score: number;
+  score: number | null;
   max: number;
-  percentage: number;
-  colorClass: string;
+  subtitle?: string;
 }
 
-const GaugeScore: React.FC<GaugeScoreProps> = ({ title, score, max, percentage, colorClass }) => {
+const GaugeScore = ({ score, max, title, subtitle }: any) => {
+  const pct = score != null ? Math.max(0, Math.min(score / max, 1)) : 0;
   const dashArray = 125.6;
-  const dashOffset = dashArray - (dashArray * percentage);
+  const dashOffset = dashArray - (dashArray * pct);
+
+  const arcColor =
+    score === null     ? '#3f3f46'   // zinc-700 — unknown
+    : score >= 7.5     ? '#10b981'   // emerald-500
+    : score >= 5.0     ? '#f59e0b'   // amber-500
+    : '#f43f5e';                     // rose-500
+
+  const textColor =
+    score === null     ? 'text-zinc-500'
+    : score >= 7.5     ? 'text-emerald-400'
+    : score >= 5.0     ? 'text-amber-400'
+    : 'text-rose-400';
+
   return (
-    <div className="bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-2xl p-6 flex flex-col items-center justify-between h-full min-h-[180px]">
-      <h3 className="text-zinc-400 text-sm w-full text-left font-medium">{title}</h3>
-      <div className="relative w-full flex-1 flex items-center justify-center mt-4">
-        <svg viewBox="0 0 100 60" className="w-[120px] overflow-visible">
-          <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#27272a" strokeWidth="4" strokeLinecap="round" />
-          <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="currentColor" className={colorClass} strokeWidth="4" strokeLinecap="round"
-            strokeDasharray={dashArray} strokeDashoffset={dashOffset} style={{ transition: 'stroke-dashoffset 1s ease-in-out' }} />
-          <circle cx="50" cy="50" r="3" fill="#52525b" />
-          <line x1="50" y1="50" x2="16" y2="50" stroke="#a1a1aa" strokeWidth="1.5" strokeLinecap="round"
-            style={{ transform: `rotate(${percentage * 180}deg)`, transformOrigin: '50px 50px', transition: 'transform 1s ease-in-out' }} />
+    <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-5 flex flex-col items-center justify-between h-full min-h-[170px]">
+      <h3 className="text-zinc-400 text-xs w-full text-left font-medium uppercase tracking-wider">{title}</h3>
+      <div className="relative w-full flex-1 flex items-center justify-center mt-3">
+        <svg viewBox="0 0 100 60" className="w-[110px] overflow-visible">
+          <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#1f2937" strokeWidth="5" strokeLinecap="round" />
+          <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke={arcColor} strokeWidth="5" strokeLinecap="round"
+            strokeDasharray={dashArray} strokeDashoffset={score != null ? dashOffset : dashArray}
+            style={{ transition: 'stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1)' }} />
+          <circle cx="50" cy="50" r="2.5" fill="#52525b" />
+          {score != null && (
+            <line x1="50" y1="50" x2="16" y2="50" stroke="#71717a" strokeWidth="1.5" strokeLinecap="round"
+              style={{ transform: `rotate(${pct * 180}deg)`, transformOrigin: '50px 50px', transition: 'transform 1.2s cubic-bezier(0.4,0,0.2,1)' }} />
+          )}
         </svg>
-        <div className="absolute bottom-[-15px] flex flex-col items-center">
-          <span className="text-xl font-semibold text-zinc-100">{score.toFixed(1)}<span className="text-sm text-zinc-500 font-normal">/{max}</span></span>
+        <div className="absolute bottom-[-12px] flex flex-col items-center">
+          {score != null ? (
+            <span className={`text-lg font-semibold ${textColor}`}>
+              {score.toFixed(1)}<span className="text-xs text-zinc-600 font-normal">/{max}</span>
+            </span>
+          ) : (
+            <span className="text-sm font-medium text-zinc-600 italic">N/A</span>
+          )}
         </div>
       </div>
+      {subtitle && <p className="text-xs text-zinc-500 mt-5 text-center">{subtitle}</p>}
     </div>
   );
 };
@@ -65,7 +92,7 @@ const DebateSimulation = ({ onClose }: { onClose: () => void }) => {
   }, []);
 
   return (
-    <div className="fixed inset-0 z-[100] bg-[#09090b] text-zinc-100 flex flex-col overflow-hidden font-sans">
+    <div className="fixed inset-0 z-[100] bg-[#000000] text-zinc-100 flex flex-col overflow-hidden font-sans">
       <style>{`
         @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-10px); } }
         @keyframes speak-ring { 0% { transform: scale(0.8); opacity: 0.8; } 100% { transform: scale(1.5); opacity: 0; } }
@@ -86,7 +113,7 @@ const DebateSimulation = ({ onClose }: { onClose: () => void }) => {
         <button onClick={onClose} className="p-2 hover:bg-zinc-800 rounded-full transition-colors"><X className="w-5 h-5 text-zinc-400" /></button>
       </header>
       <div className="flex-1 flex relative">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-900 via-[#09090b] to-[#09090b]"></div>
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-900 via-[#050505] to-[#000000]"></div>
         <div className="flex-1 flex flex-col items-center justify-center p-8 relative z-10 border-r border-zinc-800/50">
           <div className={`relative w-32 h-32 rounded-full bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-500 animate-float ${phase === 1 || phase === 3 ? 'animate-speak' : ''}`}>
             <Bot className="w-12 h-12" />
@@ -94,7 +121,7 @@ const DebateSimulation = ({ onClose }: { onClose: () => void }) => {
           <h3 className="mt-8 text-lg font-medium text-blue-400">Proponent Agent</h3>
           <p className="text-zinc-500 text-sm uppercase tracking-wider mt-1">Optimization: Efficacy</p>
           <div className="mt-8 w-full max-w-sm bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-xl p-5 h-48 overflow-hidden relative">
-            <div className="absolute top-0 left-0 w-full h-8 bg-gradient-to-b from-[#121214] to-transparent z-10"></div>
+            <div className="absolute top-0 left-0 w-full h-8 bg-gradient-to-b from-[#000000] to-transparent z-10"></div>
             <div className="space-y-3 text-sm text-zinc-400">
               <p className="opacity-40">Initializing efficacy models...</p>
               {phase >= 1 && <p className="text-blue-200">Analyzing AMPK activation pathways.</p>}
@@ -115,7 +142,7 @@ const DebateSimulation = ({ onClose }: { onClose: () => void }) => {
               <rect x="10" y="20" width="40" height="20" rx="3" />
               <rect x="25" y="40" width="10" height="50" rx="2" />
             </svg>
-            <div className="w-40 h-12 bg-[#121214] border-t-2 border-zinc-700 rounded-t-xl absolute bottom-0 shadow-2xl flex items-center justify-center">
+            <div className="w-40 h-12 bg-[#0a0a0a] border-t-2 border-zinc-700 rounded-t-xl absolute bottom-0 shadow-2xl flex items-center justify-center">
               <div className="w-32 h-2 bg-zinc-800 rounded-full overflow-hidden">
                 <div className="h-full bg-emerald-500 w-[70%] transition-all duration-1000"></div>
               </div>
@@ -225,40 +252,69 @@ interface PharmacologicalProfileData {
   halfLife: string;
 }
 
-const PharmacologicalProfileSection = ({ data }: { data: PharmacologicalProfileData }) => (
-  <div className="mb-10 animate-in fade-in duration-500">
-    <h3 className="text-xl font-medium text-zinc-100 mb-6 flex items-center gap-2">
-      <FlaskConical className="w-5 h-5 text-indigo-400" /> Pharmacokinetics (ADME)
-    </h3>
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-2 bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-2xl p-8">
-        <p className="text-sm text-zinc-400 leading-relaxed mb-8">{data.overview}</p>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            { label: 'Absorption', value: data.absorption, icon: Droplets },
-            { label: 'Distribution', value: data.distribution, icon: Network },
-            { label: 'Metabolism', value: data.metabolism, icon: Zap },
-            { label: 'Elimination', value: data.elimination, icon: Activity },
-          ].map((prop, i) => (
-            <div key={i} className="bg-[#09090b] border border-[#27272a] rounded-xl p-5 flex flex-col relative group hover:border-zinc-700 transition-colors">
-              <div className="flex flex-row items-center gap-2 mb-3 shrink-0">
-                <prop.icon className="w-4 h-4 text-zinc-500 group-hover:text-indigo-400 transition-colors" />
-                <span className="text-xs text-zinc-400 uppercase tracking-wider font-medium">{prop.label}</span>
-              </div>
-              <div className="text-sm text-zinc-300 mt-1 leading-relaxed text-left">{prop.value}</div>
-            </div>
-          ))}
+const ADMERow = ({ label, value, icon: Icon }: any) => {
+  const cleanVal = (value || '').trim();
+  const isUnknown = !cleanVal || cleanVal.toLowerCase() === 'unknown' || cleanVal.toLowerCase() === 'none';
+  const displayValue = isUnknown ? 'Data not established in current registries.' : cleanVal;
+  
+  return (
+    <div className="flex flex-col md:flex-row gap-5 p-5 bg-zinc-950/40 border border-zinc-800/60 rounded-xl hover:border-zinc-700 transition-colors">
+      <div className="flex items-center gap-3 md:w-48 shrink-0">
+        <div className="w-8 h-8 rounded-full bg-zinc-900 flex items-center justify-center border border-zinc-800">
+           <Icon className="w-4 h-4 text-indigo-400" />
         </div>
+        <span className="text-sm font-medium text-zinc-200 uppercase tracking-wider">{label}</span>
       </div>
-      <div className="lg:col-span-1 bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-2xl p-8 flex flex-col justify-center items-center text-center relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(99,102,241,0.05)_0%,transparent_70%)]"></div>
-        <Clock className="w-8 h-8 text-indigo-400 mb-4 relative z-10" />
-        <span className="text-[10px] text-zinc-500 uppercase tracking-wider relative z-10">Estimated Half-Life</span>
-        <span className="text-3xl font-light text-zinc-100 mt-2 relative z-10">{data.halfLife}</span>
+      <div className="text-sm text-zinc-400 leading-relaxed md:border-l border-zinc-800/60 md:pl-6 flex items-center">
+        <span className={clsx("line-clamp-3", isUnknown && "italic text-zinc-500")}>{displayValue}</span>
       </div>
     </div>
-  </div>
-);
+  );
+};
+
+const PharmacologicalProfileSection = ({ data }: { data: PharmacologicalProfileData }) => {
+  const hl = (data.halfLife || '').trim();
+  const isUnknownHL = !hl || hl.toLowerCase() === 'unknown';
+
+  return (
+    <div className="mb-10 animate-in fade-in duration-500">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+          <FlaskConical className="w-5 h-5 text-indigo-400" />
+        </div>
+        <div>
+          <h3 className="text-xl font-medium text-zinc-100">Pharmacokinetics (ADME)</h3>
+          <p className="text-xs text-zinc-500 uppercase tracking-wide mt-0.5">Metabolic Profile & Half-life</p>
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="lg:col-span-9 space-y-3">
+          {data.overview && data.overview.toLowerCase() !== 'unknown' && (
+            <p className="text-sm text-zinc-400 leading-relaxed mb-6 px-4 py-3 bg-zinc-900/30 rounded-lg border-l-2 border-indigo-500/50">{data.overview}</p>
+          )}
+          <ADMERow label="Absorption" value={data.absorption} icon={Droplets} />
+          <ADMERow label="Distribution" value={data.distribution} icon={Network} />
+          <ADMERow label="Metabolism" value={data.metabolism} icon={Zap} />
+          <ADMERow label="Elimination" value={data.elimination} icon={Activity} />
+        </div>
+        
+        <div className="lg:col-span-3">
+          <div className="bg-zinc-900/40 backdrop-blur-md border border-zinc-800/60 rounded-2xl p-6 flex flex-col items-center justify-center text-center relative overflow-hidden h-full min-h-[220px]">
+            <div className="absolute top-0 rotate-180 w-full h-1/2 bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.1)_0%,transparent_70%)]"></div>
+            <div className="w-12 h-12 rounded-full bg-zinc-950 border border-zinc-800 flex items-center justify-center mb-6 relative z-10 shadow-lg">
+              <Clock className="w-5 h-5 text-indigo-400" />
+            </div>
+            <span className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-3 relative z-10">Estimated Half-Life</span>
+            <span className={clsx("font-light relative z-10", isUnknownHL ? "text-zinc-600 italic text-lg" : "text-zinc-100 text-2xl")}>
+              {isUnknownHL ? 'Not established' : data.halfLife}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 interface SafetyToxicityData {
   toxicitySummary: string;
@@ -266,42 +322,60 @@ interface SafetyToxicityData {
   alerts: string[];
 }
 
-const SafetyToxicitySection = ({ data }: { data: SafetyToxicityData }) => (
-  <div className="mb-10 animate-in fade-in duration-500">
-    <h3 className="text-xl font-medium text-zinc-100 mb-6 flex items-center gap-2">
-      <ShieldAlert className="w-5 h-5 text-rose-500" /> Safety & Toxicity Profile
-    </h3>
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div className="md:col-span-1 bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-2xl p-6 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-1 h-full bg-rose-500/50"></div>
-        <span className="text-xs text-zinc-500 block mb-3 uppercase tracking-wider font-medium">Risk Summary</span>
-        <p className="text-sm text-zinc-400 leading-relaxed">{data.toxicitySummary}</p>
-      </div>
-      <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-2xl p-6 hover:border-amber-500/30 transition-colors">
-          <h4 className="text-sm font-medium text-amber-400 mb-4 flex items-center gap-2"><Activity size={16} /> Risk Indicators</h4>
-          <ul className="space-y-3">
-            {(data.riskIndicators || []).map((risk, idx) => (
-              <li key={idx} className="text-sm text-zinc-400 flex items-start gap-3">
-                <div className="w-1.5 h-1.5 rounded-full bg-amber-500/50 mt-1.5 shrink-0" /><span>{risk}</span>
-              </li>
-            ))}
-          </ul>
+const SafetyToxicitySection = ({ data }: { data: SafetyToxicityData }) => {
+  const isUnknownStr = (str: string) => !str || str.toLowerCase() === 'unknown' || str.toLowerCase() === 'none' || str.toLowerCase() === 'ld50 unknown' || str === '-';
+  const validRisks = (data.riskIndicators || []).filter(r => !isUnknownStr(r));
+  const validAlerts = (data.alerts || []).filter(a => !isUnknownStr(a));
+  
+  const summary = isUnknownStr(data.toxicitySummary) 
+    ? "Detailed toxicity and safety profiles for this compound have not been conclusively established or are unavailable in the current datasets." 
+    : data.toxicitySummary;
+
+  return (
+    <div className="mb-10 animate-in fade-in duration-500">
+      <h3 className="text-xl font-medium text-zinc-100 mb-6 flex items-center gap-2">
+        <ShieldAlert className="w-5 h-5 text-rose-500" /> Safety & Toxicity Profile
+      </h3>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="md:col-span-1 bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-2xl p-6 relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-1 h-full bg-rose-500/50"></div>
+          <span className="text-xs text-zinc-500 block mb-3 uppercase tracking-wider font-medium">Risk Summary</span>
+          <p className={clsx("text-sm leading-relaxed line-clamp-6", summary.includes('not been conclusively') ? "text-zinc-500 italic" : "text-zinc-400")}>{summary}</p>
         </div>
-        <div className="bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-2xl p-6 hover:border-rose-500/30 transition-colors">
-          <h4 className="text-sm font-medium text-rose-400 mb-4 flex items-center gap-2"><ShieldAlert size={16} /> Critical Alerts</h4>
-          <ul className="space-y-3">
-            {(data.alerts || []).map((alert, idx) => (
-              <li key={idx} className="text-sm text-zinc-400 flex items-start gap-3">
-                <div className="w-1.5 h-1.5 rounded-full bg-rose-500/50 mt-1.5 shrink-0" /><span>{alert}</span>
-              </li>
-            ))}
-          </ul>
+        <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-2xl p-6 hover:border-amber-500/30 transition-colors">
+            <h4 className="text-sm font-medium text-amber-400 mb-4 flex items-center gap-2"><Activity size={16} /> Risk Indicators</h4>
+            {validRisks.length > 0 ? (
+              <ul className="space-y-3">
+                {validRisks.map((risk, idx) => (
+                  <li key={idx} className="text-sm text-zinc-300 flex items-start gap-3">
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500/50 mt-1.5 shrink-0" /><span>{risk}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-zinc-500 italic">No specific risk indicators parsed.</p>
+            )}
+          </div>
+          <div className="bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-2xl p-6 hover:border-rose-500/30 transition-colors">
+            <h4 className="text-sm font-medium text-rose-400 mb-4 flex items-center gap-2"><ShieldAlert size={16} /> Critical Alerts</h4>
+            {validAlerts.length > 0 ? (
+              <ul className="space-y-3">
+                {validAlerts.map((alert, idx) => (
+                  <li key={idx} className="text-sm text-zinc-300 flex items-start gap-3">
+                    <div className="w-1.5 h-1.5 rounded-full bg-rose-500/50 mt-1.5 shrink-0" /><span>{alert}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-zinc-500 italic">No critical alerts found.</p>
+            )}
+          </div>
         </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 interface ExecutiveSynthesisData {
   systemStatus: string;
@@ -333,7 +407,7 @@ const ExecutiveSynthesisSection = ({ data }: { data: ExecutiveSynthesisData }) =
         </button>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-[#09090b] border border-[#27272a] rounded-xl p-5">
+        <div className="bg-zinc-950 border border-zinc-800/80 rounded-xl p-5">
           <h4 className="text-sm font-medium text-zinc-200 flex items-center gap-2 mb-3">
             <TrendingUp className="w-4 h-4 text-emerald-500" /> Opportunities
           </h4>
@@ -362,7 +436,96 @@ const ExecutiveSynthesisSection = ({ data }: { data: ExecutiveSynthesisData }) =
   );
 };
 
+
+interface PhoenixBreakdownPanelProps {
+  breakdown: {
+    regulatory?: number;
+    indication_distance?: number;
+    clinical?: number;
+    mechanism?: number;
+    serendipity?: number;
+    indication_count?: number;
+    max_phase?: string;
+    ot_score?: number;
+    original_indication?: string;
+  };
+  explanation: string;
+  score: number | null;
+}
+
+const PhoenixBreakdownPanel: React.FC<PhoenixBreakdownPanelProps> = ({ breakdown, explanation, score }) => {
+  const pillars = [
+    { label: 'Regulatory Evidence', key: 'regulatory', weight: '30%', description: 'FDA approvals & indication count' },
+    { label: 'Indication Distance', key: 'indication_distance', weight: '25%', description: 'Therapeutic distance from original indication' },
+    { label: 'Clinical Evidence', key: 'clinical', weight: '25%', description: 'Phase & trial count signals' },
+    { label: 'Mechanism Score', key: 'mechanism', weight: '10%', description: 'Target association strength (Open Targets)' },
+    { label: 'Serendipity', key: 'serendipity', weight: '10%', description: 'Beneficial FAERS hits & secondary endpoints' },
+  ] as const;
+
+  return (
+    <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-6 mb-8 animate-in fade-in duration-500">
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-2">
+          <BarChart3 className="w-4 h-4 text-indigo-400" />
+          <h3 className="text-sm font-semibold text-zinc-100">Phoenix Score Breakdown</h3>
+        </div>
+        {score != null && (
+          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded border ${
+            score >= 7.5 ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+            : score >= 5.0 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20'
+            : 'text-rose-400 bg-rose-500/10 border-rose-500/20'
+          }`}>
+            {score.toFixed(1)} / 10
+          </span>
+        )}
+      </div>
+
+      <div className="space-y-3 mb-5">
+        {pillars.map(({ label, key, weight, description }) => {
+          const val = breakdown[key] ?? 0;
+          const pct = Math.min((val / 10) * 100, 100);
+          const barColor = val >= 7.5 ? 'bg-emerald-500' : val >= 4 ? 'bg-indigo-500' : 'bg-zinc-600';
+          return (
+            <div key={key}>
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-200 font-medium">{label}</span>
+                  <span className="text-xs text-zinc-500 hidden sm:inline">{description}</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs text-zinc-500 font-mono">{weight}</span>
+                  <span className="text-sm text-zinc-300 font-mono w-8 text-right">{val.toFixed(1)}</span>
+                </div>
+              </div>
+              <div className="h-1 w-full bg-zinc-800/80 rounded-full overflow-hidden">
+                <motion.div className={`h-full rounded-full ${barColor}`}
+                  initial={{ width: 0 }} animate={{ width: `${pct}%` }}
+                  transition={{ duration: 0.8, ease: 'easeOut', delay: 0.1 }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {breakdown.original_indication && (
+        <div className="flex items-center gap-3 text-xs text-zinc-400 mb-4 pt-3 border-t border-zinc-800/60">
+          <span className="text-zinc-500 uppercase tracking-wider">Original Indication</span>
+          <span className="text-zinc-300">{breakdown.original_indication}</span>
+          {breakdown.max_phase && (
+            <><span className="text-zinc-700">·</span><span className="text-zinc-400">{breakdown.max_phase}</span></>
+          )}
+        </div>
+      )}
+
+      {explanation && (
+        <p className="text-sm text-zinc-400 leading-relaxed border-t border-zinc-800/60 pt-4">{explanation}</p>
+      )}
+    </div>
+  );
+};
+
 interface StructuralAnalysisLeadData {
+
   moleculeName: string;
   similarityScore: number;
   mechanismMatch: string;
@@ -470,10 +633,10 @@ const ClinicalTrialOverview = ({ data }: { data: ClinicalTrialData[] }) => (
       {data && data.length > 0 ? (
         <div className="space-y-4">
           {data.map((item, idx) => (
-            <div key={idx} className="flex items-center gap-4 p-4 bg-[#09090b] border border-[#27272a] rounded-xl hover:border-zinc-700 transition-colors">
+            <div key={idx} className="flex items-center gap-4 p-4 bg-zinc-950 border border-zinc-800/80 rounded-xl hover:border-zinc-700 transition-colors">
               <div className="flex-1 min-w-0">
                 <h4 className="text-sm font-medium text-zinc-200 truncate">{item.drugName}</h4>
-                <p className="text-xs text-zinc-500 uppercase tracking-wider mt-1">{item.phase}</p>
+                <p className="text-xs text-zinc-400 uppercase tracking-wide mt-1">{item.phase}</p>
               </div>
               <div className="w-48 hidden sm:block">
                 <div className="flex justify-between text-[10px] uppercase tracking-wider mb-1.5">
@@ -543,6 +706,40 @@ const ResearchPaperList = ({ data, setActiveSidebar }: { data: ResearchPaperData
   </div>
 );
 
+const HeroAlternativeMolecule = ({ cid }: { cid: number }) => {
+  const [twin, setTwin] = useState<any>(null);
+  
+  useEffect(() => {
+    async function fetchTwin() {
+      try {
+        const [sim2d, sub, superstruct, sim3d] = await Promise.all([
+          getSimilarityNeighbors(cid),
+          getSubstructureNeighbors(cid),
+          getSuperstructureNeighbors(cid),
+          get3DSimilarityNeighbors(cid)
+        ]);
+        const combined = aggregateNeighbors(sim2d, sub, superstruct, sim3d);
+        const bestTwin = selectMolecularTwin(combined, cid);
+        setTwin(bestTwin);
+      } catch (e) {}
+    }
+    fetchTwin();
+  }, [cid]);
+
+  if (!twin) return <p className="text-sm text-zinc-600 italic">Locating structural twin...</p>;
+
+  return (
+    <>
+      <p className="text-xl font-medium text-zinc-100 truncate mb-1">
+        {twin.twinLabel}
+      </p>
+      <p className="text-sm text-zinc-400 line-clamp-2 leading-relaxed max-w-[90%]">
+         {twin.rationale || 'Identified as top 3D-similar candidate with shared core pharmacophore.'}
+      </p>
+    </>
+  );
+};
+
 const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMode, setActiveSidebar }: any) => {
   const [synthExpanded, setSynthExpanded] = useState(false);
   const synthesisTags = Array.from(new Set([
@@ -564,32 +761,69 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
 
   const totalMarket = (report.market_analysis || []).reduce((sum: number, item: any) => sum + (Number(item.market_size_usd_billion) || 0), 0);
 
+  const phoenixScore: number | null = report.phoenix_score != null ? Number(report.phoenix_score) : null;
+  const viabilityScore: number | null = report.viability_score != null ? Number(report.viability_score) : null;
+
   return (
     <div className="animate-in fade-in duration-500 w-full mx-auto">
+      {(report.ai_analysis?.confidence != null && Number(report.ai_analysis.confidence) < 0.6) && (
+        <div className="mb-6 p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-400 font-medium text-sm flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5" />
+          ⚠ Score based on partial data — some APIs unavailable
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
-        <div className="col-span-1 lg:col-span-8 bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-2xl p-8 lg:p-12 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8 min-h-[460px]">
-          <div className="relative z-10 w-full md:w-1/2 flex flex-col">
-            <h1 className="text-4xl lg:text-5xl font-semibold text-zinc-100 mb-2 tracking-tight">{report.molecule}</h1>
-            <p className="text-zinc-500 text-sm mb-6 uppercase tracking-wider font-medium">Compound Overview</p>
-            <div className="space-y-8">
-              <div>
-                <p className="text-3xl font-light text-zinc-200">
-                  {totalMarket > 0 ? `₹${(totalMarket * 83.5).toFixed(1)}` : 'Not determined'}
-                  {totalMarket > 0 && <span className="text-lg text-zinc-600 font-normal"> INR (Billions)</span>}
+        <div className="col-span-1 lg:col-span-8 bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-8 lg:p-10 relative overflow-hidden flex flex-col md:flex-row items-stretch justify-between gap-8 min-h-[440px]">
+          <div className="relative z-10 w-full md:w-1/2 flex flex-col justify-between">
+            <div>
+              <h1 className="text-4xl lg:text-5xl font-semibold text-zinc-100 mb-1 tracking-tight">{report.molecule}</h1>
+              <p className="text-zinc-500 text-xs mb-8 uppercase tracking-wide font-medium">Compound Overview</p>
+            </div>
+            <div className="grid grid-cols-2 gap-y-8 gap-x-6 mt-6">
+              <div className="border-l-2 border-zinc-800 pl-4">
+                <p className="text-2xl font-light text-zinc-100">
+                  {totalMarket > 0 ? `₹${(totalMarket * 83.5).toFixed(1)}B` : <span className="text-zinc-600 text-base italic">No market data</span>}
                 </p>
-                <p className="text-sm text-zinc-500 font-medium">Total Addressable Market</p>
+                <p className="text-xs text-zinc-400 mt-1 uppercase tracking-wide">Total Addressable Market</p>
               </div>
-              <div>
-                <p className="text-3xl font-light text-zinc-200">
-                  {Number(report.phoenix_score || 0).toFixed(1)}<span className="text-lg text-zinc-600 font-normal">/10</span>
-                </p>
-                <p className="text-sm text-zinc-500 font-medium">Phoenix Score</p>
+              <div className="border-l-2 border-zinc-800 pl-4">
+                {phoenixScore != null ? (
+                  <p className="text-2xl font-light text-zinc-100">
+                    {phoenixScore.toFixed(1)}<span className="text-base text-zinc-600 font-normal">/10</span>
+                  </p>
+                ) : (
+                  <p className="text-base text-zinc-600 italic">Computing…</p>
+                )}
+                <p className="text-xs text-zinc-400 mt-1 uppercase tracking-wide">Phoenix Score</p>
               </div>
+
+              {((report.repurposing_candidates || []).length > 0) && (
+                <div className="border-l-2 border-indigo-500/50 pl-4 col-span-2 pt-1 border-t-0 mt-2">
+                  <p className="text-xl font-medium text-zinc-100 mb-1.5">
+                    {(report.repurposing_candidates || [])[0].condition}
+                  </p>
+                  <div className="flex items-center gap-3">
+                     <span className="text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide ring-1 ring-indigo-500/20">{(report.repurposing_candidates || [])[0].max_phase}</span>
+                     {((report.repurposing_candidates || [])[0].market_size_usd_billion || 0) > 0 && (
+                       <span className="text-zinc-400 text-sm">${((report.repurposing_candidates || [])[0].market_size_usd_billion || 0).toFixed(1)}B Market</span>
+                     )}
+                  </div>
+                  <p className="text-xs text-indigo-400 mt-3 uppercase tracking-wide font-medium">Top Repurposing Opportunity</p>
+                </div>
+              )}
+
+              {report.pubchem_data?.cid && (
+                <div className="border-l-2 border-emerald-500/50 pl-4 col-span-2 pt-1 mt-2">
+                  <HeroAlternativeMolecule cid={report.pubchem_data.cid} />
+                  <p className="text-xs text-emerald-400 mt-3 uppercase tracking-wide font-medium">Primary Structural Twin</p>
+                </div>
+              )}
             </div>
           </div>
           <div className="relative z-10 w-full md:w-1/2 flex flex-col items-center justify-center h-full">
             <div className="flex w-full justify-between items-center mb-4">
-              <span className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Structure</span>
+              <span className="text-xs text-zinc-400 uppercase tracking-wide font-semibold">Structure</span>
               <div className="flex items-center bg-[#18181b] border border-[#27272a] rounded-lg p-0.5 gap-0.5 text-zinc-400">
                 <Button size="sm" variant={structureMode === '2d' ? 'secondary' : 'ghost'}
                   className={clsx("h-6 px-2.5 text-xs gap-1", structureMode === '2d' ? "bg-zinc-800 text-zinc-100" : "")} onClick={() => setStructureMode('2d')}>
@@ -628,14 +862,14 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
           </div>
         </div>
 
-        <div className="col-span-1 lg:col-span-4 flex flex-col gap-6">
-          <div className="grid grid-cols-2 gap-4 flex-none min-h-[200px]">
-            <GaugeScore title="AI Viability Score" score={Number(report.viability_score || 0)} max={10} percentage={Number(report.viability_score || 0) / 10} colorClass="text-zinc-300" />
-            <GaugeScore title="Phoenix Score" score={Number(report.phoenix_score || 0)} max={10} percentage={Number(report.phoenix_score || 0) / 10} colorClass="text-zinc-500" />
+        <div className="col-span-1 lg:col-span-4 flex flex-col gap-4">
+          <div className="grid grid-cols-2 gap-3 flex-none">
+            <GaugeScore title="Viability Score" score={viabilityScore} max={10} subtitle="LLM-computed" />
+            <GaugeScore title="Phoenix Score" score={phoenixScore} max={10} subtitle="Data pipeline" />
           </div>
-          <div className="bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-2xl p-8 flex-1">
-            <h3 className="text-zinc-100 text-[15px] font-medium mb-3">Quick Synthesis</h3>
-            <p className="text-sm text-zinc-500 mb-2 leading-relaxed">
+          <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-6 flex-1">
+            <h3 className="text-zinc-200 text-sm font-semibold mb-3">Quick Synthesis</h3>
+            <p className="text-sm text-zinc-400 mb-2 leading-relaxed">
               {displayReasoning}
               <span onClick={() => setActiveSidebar('refs')}
                 className="inline-flex items-center justify-center ml-1 px-1.5 h-4 text-[9px] font-bold bg-indigo-500/20 text-indigo-400 rounded cursor-pointer hover:bg-indigo-500/40 transition-colors">
@@ -644,15 +878,15 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
             </p>
             {isLong && (
               <button onClick={() => setSynthExpanded(e => !e)}
-                className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors mb-4 flex items-center gap-1">
+                className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors mb-3 flex items-center gap-1">
                 {synthExpanded ? 'Show less' : 'Read full synthesis'}
                 <ChevronDown size={12} className={clsx('transition-transform', synthExpanded && 'rotate-180')} />
               </button>
             )}
-            <div className="flex flex-wrap gap-2 mt-4">
+            <div className="flex flex-wrap gap-2 mt-3">
               {synthesisTags.map((tag: any, i: number) => (
-                <span key={i} className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                  i === 0 ? 'bg-zinc-800 border-zinc-700 text-zinc-200' : 'bg-transparent border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700'
+                <span key={i} className={`text-xs px-2.5 py-1 rounded-md border transition-colors ${
+                  i === 0 ? 'bg-zinc-800 border-zinc-700 text-zinc-300' : 'bg-transparent border-zinc-800/60 text-zinc-600 hover:text-zinc-400 hover:border-zinc-700'
                 }`}>{tag as string}</span>
               ))}
             </div>
@@ -676,6 +910,13 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
         opportunities: report?.ai_analysis?.top_opportunities || [],
         risks: report?.ai_analysis?.top_risks || []
       }} />
+      {report.phoenix_breakdown && Object.keys(report.phoenix_breakdown).length > 0 && (
+        <PhoenixBreakdownPanel
+          breakdown={report.phoenix_breakdown}
+          explanation={report.phoenix_explanation || ''}
+          score={phoenixScore}
+        />
+      )}
     </div>
   );
 };
@@ -727,12 +968,12 @@ const ClinicalAndIPTab = ({ report }: any) => (
           <div className="space-y-3">
             {(report.patent_data || []).length > 0 ? (report.patent_data || []).map((p: any) => (
               <a key={p.id} href={p.url || '#'} target="_blank" rel="noreferrer"
-                className="block p-4 border border-zinc-800 rounded-xl hover:border-zinc-600 bg-[#09090b] transition-all text-left">
+                className="block p-4 border border-zinc-800/80 rounded-xl hover:border-zinc-600 bg-zinc-950 transition-all text-left">
                 <div className="text-indigo-400 text-xs mb-1 font-mono">{p.id}</div>
                 <div className="text-zinc-200 text-sm">{p.title}</div>
               </a>
             )) : (
-              <div className="p-4 border border-zinc-800 rounded-xl bg-[#09090b] text-center">
+              <div className="p-4 border border-zinc-800/80 rounded-xl bg-zinc-950 text-center">
                 <p className="text-zinc-500 text-sm">No patents discovered for this compound.</p>
                 <p className="text-xs text-emerald-600 mt-1">This may indicate open IP landscape — a repurposing opportunity.</p>
               </div>
@@ -743,12 +984,12 @@ const ClinicalAndIPTab = ({ report }: any) => (
           <h4 className="text-sm font-medium text-zinc-400 mb-4 uppercase tracking-wider">Primary Literature</h4>
           <div className="space-y-3">
             {(report.literature_data || []).length > 0 ? (report.literature_data || []).slice(0, 3).map((l: any, idx: number) => (
-              <div key={idx} className="block p-4 border border-zinc-800 rounded-xl bg-[#09090b] text-left">
+              <div key={idx} className="block p-4 border border-zinc-800/80 rounded-xl bg-zinc-950 text-left">
                 <div className="text-emerald-400 text-xs mb-1 font-medium">{l.journal || 'PubMed'} · {l.year}</div>
                 <div className="text-zinc-200 text-sm leading-relaxed">{l.title}</div>
               </div>
             )) : (
-              <div className="p-4 border border-zinc-800 rounded-xl bg-[#09090b] text-center">
+              <div className="p-4 border border-zinc-800/80 rounded-xl bg-zinc-950 text-center">
                 <p className="text-zinc-500 text-sm">No prominent literature found in PubMed.</p>
               </div>
             )}
@@ -794,8 +1035,8 @@ const ScienceTab = ({ report, setActiveSidebar }: any) => {
           { label: 'Complexity',    value: pd.complexity != null ? Math.round(Number(pd.complexity)) : null,    unit: '' },
           { label: 'Rule of 5',     value: ro5,                                                                 unit: '' },
         ].map((prop, i) => (
-          <div key={i} className="bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-2xl p-5 flex flex-col justify-between hover:bg-[#18181b] transition-colors">
-            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium">{prop.label}</span>
+          <div key={i} className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-5 flex flex-col justify-between hover:bg-zinc-900/60 transition-colors">
+            <span className="text-xs text-zinc-400 uppercase tracking-wide font-medium">{prop.label}</span>
             <div className="flex items-baseline gap-1 mt-3">
               {prop.value === null || prop.value === undefined ? (
                 <span className="text-sm font-light text-zinc-600 italic">Not determined</span>
@@ -858,7 +1099,7 @@ const MarketTab = ({ report, currency, formatMarketSize }: any) => (
                     <span className="font-light text-zinc-200 w-20 text-right text-lg">{formatMarketSize(Number(item.market_size_usd_billion) || 0)}</span>
                   </div>
                 </div>
-                <div className="w-full bg-[#09090b] rounded-full h-2 overflow-hidden border border-[#27272a]">
+                <div className="w-full bg-zinc-950 rounded-full h-2 overflow-hidden border border-zinc-800/80">
                   <motion.div className="h-full rounded-full bg-gradient-to-r from-indigo-600 to-indigo-400"
                     initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 1, delay: i * 0.1, ease: 'easeOut' }} />
                 </div>
@@ -999,291 +1240,28 @@ export default function ReportPage() {
   };
 
   const handleExportPdf = async () => {
-    if (!report) return;
+    if (!report || !id) return;
     setIsExportingPdf(true);
     try {
-      const html2pdf = (await import('html2pdf.js')).default;
+      const res = await fetch(`/api/reports/${id}/pdf`);
+      if (!res.ok) throw new Error('PDF Generation failed');
       
-      const execText = Array.isArray(report.ai_analysis?.reasoning) 
-        ? report.ai_analysis.reasoning[0] 
-        : (report.ai_analysis?.reasoning || 'Comprehensive AI analysis indicates strong potential for therapeutic repositioning across multiple novel targets.');
-      
-      const topOpps = (report.repurposing_candidates || [
-        { condition: 'Metabolic Syndrome', max_phase: 'PHASE 2', repurposing_score: 8.5, market_size_usd_billion: 12.4 },
-        { condition: 'Neuroinflammation', max_phase: 'PRE-CLINICAL', repurposing_score: 7.2, market_size_usd_billion: 8.1 },
-        { condition: 'Autoimmune Disorders', max_phase: 'PHASE 1', repurposing_score: 6.8, market_size_usd_billion: 15.3 }
-      ]).slice(0, 4);
-      
-      const risks = report.ai_analysis?.top_risks || [
-        'Potential off-target binding at high plasma concentrations',
-        'Limited CNS penetrance observed in early in-vivo models'
-      ];
-      
-      const pd = report.pubchem_data || { 
-        molecular_weight: '342.4', 
-        xlogp: '2.8', 
-        hbd: 2, 
-        hba: 4, 
-        half_life: '4.5 hours', 
-        clearance: 'Hepatic', 
-        tox_summary: 'Generally well tolerated. LD50 > 2000mg/kg in murine models. No severe hepatotoxicity observed.',
-        complexity: 452,
-        rotatable_bonds: 5
-      };
-      
-      const clinical = report.clinical_data || [
-        { drugName: 'Compound X in T2D', phase: 'Phase 2', status: 'COMPLETED' },
-        { drugName: 'Compound X in Obesity', phase: 'Phase 1', status: 'ACTIVE' }
-      ];
-
-      const analogs = report.similar_molecules || [
-        { name: 'Analog-A (Proprietary)', similarity_score: 0.92, mechanism_match: 'High', repurposing_potential: 'Strong' },
-        { name: 'Reference Cmpd B', similarity_score: 0.85, mechanism_match: 'Moderate', repurposing_potential: 'Exploratory' }
-      ];
-
-      const patents = report.patent_data || [
-        { id: 'US-1029384-B2', title: 'Novel derivatives for metabolic regulation', assignee: 'PharmaCorp', date: '2022' },
-        { id: 'EP-2938475-A1', title: 'Formulations for enhanced bioavailability', assignee: 'BioSys Ltd', date: '2023' }
-      ];
-
-      const literature = report.literature_data || [
-        { id: '34582910', title: 'Mechanistic insights into AMPK activation by novel structural analogs', journal: 'Nature Med', year: '2024' },
-        { id: '33928471', title: 'Safety and efficacy profiles of repurposing candidates in autoimmune models', journal: 'Lancet Rheum', year: '2023' }
-      ];
-
-      const market = report.market_analysis || [
-        { condition: 'Metabolic Syndrome', growth_rate_pct: 6.5, market_size_usd_billion: 12.4 },
-        { condition: 'Neuroinflammation', growth_rate_pct: 8.2, market_size_usd_billion: 8.1 },
-        { condition: 'Autoimmune Disorders', growth_rate_pct: 5.4, market_size_usd_billion: 15.3 }
-      ];
-
-      const html = `
-      <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1e293b; width: 100%; max-width: 800px; margin: 0 auto; line-height: 1.6; font-size: 13px; background: #ffffff;">
-        
-        <div style="height: 1050px; display: flex; flex-direction: column; justify-content: center; position: relative; padding: 60px; box-sizing: border-box;">
-          <div style="position: absolute; top: 0; left: 0; right: 0; height: 16px; background: linear-gradient(90deg, #4f46e5, #0ea5e9);"></div>
-          <div style="text-align: center; margin-top: -100px;">
-            <h3 style="color: #64748b; font-weight: 600; font-size: 14px; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 24px;">Molecular Intelligence Report</h3>
-            <h1 style="font-size: 52px; font-weight: 800; color: #0f172a; margin: 0 0 16px; letter-spacing: -1.5px;">${report.molecule || 'Compound Analysis'}</h1>
-            <h2 style="font-size: 20px; font-weight: 400; color: #475569; margin: 0 0 48px; font-family: Georgia, serif; font-style: italic;">Comprehensive Drug Repurposing & Viability Analysis</h2>
-            
-            <div style="display: inline-block; background-color: #f8fafc; padding: 24px 48px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 48px;">
-              <p style="margin: 0; font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600;">Phoenix Viability Score</p>
-              <p style="margin: 8px 0 0; font-size: 42px; font-weight: 800; color: #4f46e5;">${Number(report.phoenix_score || 8.4).toFixed(1)}<span style="font-size: 20px; color: #94a3b8; font-weight: 500;">/10.0</span></p>
-            </div>
-            
-            <div style="margin-top: 40px; display: flex; justify-content: center; gap: 48px;">
-               <div>
-                  <p style="margin:0; font-size: 11px; color:#64748b; text-transform:uppercase; font-weight: 600;">Generated</p>
-                  <p style="margin:4px 0 0; font-weight:600; color:#1e293b; font-size: 14px;">${new Date().toLocaleDateString()}</p>
-               </div>
-               <div>
-                  <p style="margin:0; font-size: 11px; color:#64748b; text-transform:uppercase; font-weight: 600;">Data Sources</p>
-                  <p style="margin:4px 0 0; font-weight:600; color:#1e293b; font-size: 14px;">PubMed, ClinicalTrials, ChEMBL, USPTO</p>
-               </div>
-            </div>
-          </div>
-          
-          <div style="position: absolute; bottom: 40px; left: 0; right: 0; text-align: center;">
-            <p style="margin:0; font-size: 11px; color:#94a3b8; font-weight: 500;">Confidential Intelligence Asset &middot; Automated AI Synthesis</p>
-          </div>
-        </div>
-
-        <div style="page-break-before: always;"></div>
-
-        <div style="padding: 60px; box-sizing: border-box;">
-          <div style="border-bottom: 2px solid #e2e8f0; padding-bottom: 16px; margin-bottom: 32px; display: flex; justify-content: space-between; align-items: flex-end;">
-             <div style="font-size: 14px; color: #4f46e5; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">1.0 Executive Synthesis & Commercial Assessment</div>
-             <div style="font-size: 12px; color: #94a3b8; font-weight: 500;">${report.molecule || 'Compound Analysis'}</div>
-          </div>
-          
-          <p style="font-family: Georgia, serif; font-size: 15px; line-height: 1.8; color: #334155; margin-bottom: 40px; text-align: justify;">${execText}</p>
-
-          <h3 style="font-size: 15px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 20px; border-left: 4px solid #0ea5e9; padding-left: 12px;">Primary Repurposing Targets</h3>
-          <table style="width: 100%; border-collapse: collapse; margin-bottom: 40px; font-size: 13px;">
-            <thead>
-              <tr style="border-bottom: 2px solid #cbd5e1; background: #f8fafc;">
-                <th style="text-align: left; padding: 14px 12px; font-weight: 600; color: #475569;">Indication Target</th>
-                <th style="text-align: center; padding: 14px 12px; font-weight: 600; color: #475569;">Max Phase</th>
-                <th style="text-align: center; padding: 14px 12px; font-weight: 600; color: #475569;">Score</th>
-                <th style="text-align: right; padding: 14px 12px; font-weight: 600; color: #475569;">Est. Market</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${topOpps.map((c: any) => `
-              <tr style="border-bottom: 1px solid #e2e8f0;">
-                <td style="padding: 14px 12px; color: #0f172a; font-weight: 600;">${c.condition}</td>
-                <td style="padding: 14px 12px; text-align: center;">
-                  <span style="background: #e0e7ff; color: #3730a3; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;">${c.max_phase || 'PRE-CLINICAL'}</span>
-                </td>
-                <td style="padding: 14px 12px; text-align: center; color: #0284c7; font-weight: 700;">${Number(c.repurposing_score || 0).toFixed(1)}</td>
-                <td style="padding: 14px 12px; text-align: right; color: #0f172a; font-weight: 500;">$${Number(c.market_size_usd_billion || 0).toFixed(1)}B</td>
-              </tr>
-              `).join('')}
-            </tbody>
-          </table>
-
-          <h3 style="font-size: 15px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 20px; border-left: 4px solid #8b5cf6; padding-left: 12px;">Market Penetration Potential</h3>
-          <table style="width: 100%; border-collapse: collapse; margin-bottom: 40px; font-size: 13px;">
-            <thead>
-              <tr style="border-bottom: 2px solid #cbd5e1; background: #f8fafc;">
-                <th style="text-align: left; padding: 14px 12px; font-weight: 600; color: #475569;">Therapeutic Area</th>
-                <th style="text-align: center; padding: 14px 12px; font-weight: 600; color: #475569;">CAGR</th>
-                <th style="text-align: right; padding: 14px 12px; font-weight: 600; color: #475569;">TAM (USD)</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${market.map((m: any) => `
-              <tr style="border-bottom: 1px solid #e2e8f0;">
-                <td style="padding: 14px 12px; color: #0f172a; font-weight: 600;">${m.condition}</td>
-                <td style="padding: 14px 12px; text-align: center; color: #10b981; font-weight: 600;">+${Number(m.growth_rate_pct || 0).toFixed(1)}%</td>
-                <td style="padding: 14px 12px; text-align: right; color: #0f172a; font-weight: 500;">$${Number(m.market_size_usd_billion || 0).toFixed(1)}B</td>
-              </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-
-        <div style="page-break-before: always;"></div>
-
-        <div style="padding: 60px; box-sizing: border-box;">
-          <div style="border-bottom: 2px solid #e2e8f0; padding-bottom: 16px; margin-bottom: 32px; display: flex; justify-content: space-between; align-items: flex-end;">
-             <div style="font-size: 14px; color: #4f46e5; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">2.0 Scientific & Structural Profile</div>
-             <div style="font-size: 12px; color: #94a3b8; font-weight: 500;">${report.molecule || 'Compound Analysis'}</div>
-          </div>
-
-          <div style="display: flex; gap: 32px; margin-bottom: 40px;">
-            <div style="flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 24px;">
-              <h4 style="font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; margin: 0 0 16px; letter-spacing: 1px;">Physicochemical Properties</h4>
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                <div><span style="color: #64748b; font-size: 12px;">Molecular Wt:</span> <br/><span style="font-weight: 600; color: #0f172a;">${pd.molecular_weight} g/mol</span></div>
-                <div><span style="color: #64748b; font-size: 12px;">LogP:</span> <br/><span style="font-weight: 600; color: #0f172a;">${pd.xlogp}</span></div>
-                <div><span style="color: #64748b; font-size: 12px;">H-Donors:</span> <br/><span style="font-weight: 600; color: #0f172a;">${pd.hbd}</span></div>
-                <div><span style="color: #64748b; font-size: 12px;">H-Acceptors:</span> <br/><span style="font-weight: 600; color: #0f172a;">${pd.hba}</span></div>
-                <div><span style="color: #64748b; font-size: 12px;">Complexity:</span> <br/><span style="font-weight: 600; color: #0f172a;">${pd.complexity}</span></div>
-                <div><span style="color: #64748b; font-size: 12px;">Rotatable Bonds:</span> <br/><span style="font-weight: 600; color: #0f172a;">${pd.rotatable_bonds}</span></div>
-              </div>
-            </div>
-            <div style="flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 24px;">
-              <h4 style="font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; margin: 0 0 16px; letter-spacing: 1px;">Pharmacokinetics (ADME)</h4>
-              <div style="display: grid; grid-template-columns: 1fr; gap: 16px;">
-                <div><span style="color: #64748b; font-size: 12px;">Half-Life:</span> <br/><span style="font-weight: 600; color: #0f172a;">${pd.half_life}</span></div>
-                <div><span style="color: #64748b; font-size: 12px;">Clearance:</span> <br/><span style="font-weight: 600; color: #0f172a;">${pd.clearance}</span></div>
-              </div>
-            </div>
-          </div>
-
-          <h3 style="font-size: 15px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 20px; border-left: 4px solid #14b8a6; padding-left: 12px;">Structural Analogs (Molecular Twins)</h3>
-          <table style="width: 100%; border-collapse: collapse; margin-bottom: 40px; font-size: 13px;">
-            <thead>
-              <tr style="border-bottom: 2px solid #cbd5e1; background: #f8fafc;">
-                <th style="text-align: left; padding: 14px 12px; font-weight: 600; color: #475569;">Molecule Name</th>
-                <th style="text-align: center; padding: 14px 12px; font-weight: 600; color: #475569;">Similarity Score</th>
-                <th style="text-align: center; padding: 14px 12px; font-weight: 600; color: #475569;">Mechanism Match</th>
-                <th style="text-align: right; padding: 14px 12px; font-weight: 600; color: #475569;">Repurposing Potential</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${analogs.map((a: any) => `
-              <tr style="border-bottom: 1px solid #e2e8f0;">
-                <td style="padding: 14px 12px; color: #0f172a; font-weight: 600;">${a.name}</td>
-                <td style="padding: 14px 12px; text-align: center; color: #4f46e5; font-weight: 600;">${(a.similarity_score * 100).toFixed(1)}%</td>
-                <td style="padding: 14px 12px; text-align: center; color: #0f172a;">${a.mechanism_match}</td>
-                <td style="padding: 14px 12px; text-align: right; color: #0f172a;">${a.repurposing_potential}</td>
-              </tr>
-              `).join('')}
-            </tbody>
-          </table>
-
-          <h3 style="font-size: 15px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 20px; border-left: 4px solid #ef4444; padding-left: 12px;">Risk Assessment</h3>
-          <ul style="margin: 0; padding-left: 20px; color: #334155; font-family: Georgia, serif; font-size: 14px; line-height: 1.7;">
-            ${risks.map((r: string) => `<li style="margin-bottom: 12px;">${r}</li>`).join('')}
-          </ul>
-        </div>
-
-        <div style="page-break-before: always;"></div>
-
-        <div style="padding: 60px; box-sizing: border-box;">
-          <div style="border-bottom: 2px solid #e2e8f0; padding-bottom: 16px; margin-bottom: 32px; display: flex; justify-content: space-between; align-items: flex-end;">
-             <div style="font-size: 14px; color: #4f46e5; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">3.0 Clinical Pipeline & IP Landscape</div>
-             <div style="font-size: 12px; color: #94a3b8; font-weight: 500;">${report.molecule || 'Compound Analysis'}</div>
-          </div>
-
-          <h3 style="font-size: 15px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 20px; border-left: 4px solid #10b981; padding-left: 12px;">Clinical Pipeline Snapshot</h3>
-          <table style="width: 100%; border-collapse: collapse; margin-bottom: 40px; font-size: 13px;">
-            <thead>
-              <tr style="border-bottom: 2px solid #cbd5e1; background: #f8fafc;">
-                <th style="text-align: left; padding: 14px 12px; font-weight: 600; color: #475569;">Trial / Indication Focus</th>
-                <th style="text-align: center; padding: 14px 12px; font-weight: 600; color: #475569;">Phase</th>
-                <th style="text-align: right; padding: 14px 12px; font-weight: 600; color: #475569;">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${clinical.map((c: any) => `
-              <tr style="border-bottom: 1px solid #e2e8f0;">
-                <td style="padding: 14px 12px; color: #0f172a; font-weight: 600;">${c.drugName}</td>
-                <td style="padding: 14px 12px; text-align: center; color: #4f46e5; font-weight: 600;">${c.phase}</td>
-                <td style="padding: 14px 12px; text-align: right; color: ${c.status === 'COMPLETED' ? '#10b981' : '#64748b'}; font-weight: 600;">${c.status}</td>
-              </tr>
-              `).join('')}
-            </tbody>
-          </table>
-
-          <h3 style="font-size: 15px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 16px; border-left: 4px solid #f59e0b; padding-left: 12px;">Toxicity Summary</h3>
-          <p style="font-family: Georgia, serif; font-size: 14px; line-height: 1.7; color: #334155; padding: 16px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; margin-bottom: 40px;">
-            ${pd.tox_summary}
-          </p>
-
-          <h3 style="font-size: 15px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 20px; border-left: 4px solid #0ea5e9; padding-left: 12px;">Key Patents & Literature Insights</h3>
-          <div style="display: flex; gap: 32px;">
-            <div style="flex: 1;">
-              <h4 style="font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; margin: 0 0 12px; letter-spacing: 1px;">Registered Patents</h4>
-              ${patents.map((p: any) => `
-              <div style="border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 12px; background: #f8fafc;">
-                <div style="font-size: 11px; font-weight: 700; color: #8b5cf6; margin-bottom: 4px;">${p.id}</div>
-                <div style="font-size: 12px; font-weight: 600; color: #0f172a; margin-bottom: 4px;">${p.title}</div>
-                <div style="font-size: 11px; color: #64748b; font-family: Georgia, serif;">Assignee: ${p.assignee} &middot; Date: ${p.date}</div>
-              </div>
-              `).join('')}
-            </div>
-            <div style="flex: 1;">
-              <h4 style="font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; margin: 0 0 12px; letter-spacing: 1px;">Primary Literature</h4>
-              ${literature.map((l: any) => `
-              <div style="border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 12px;">
-                <div style="font-size: 12px; font-weight: 600; color: #0f172a; margin-bottom: 4px;">${l.title}</div>
-                <div style="font-size: 11px; color: #64748b; font-family: Georgia, serif;"><span style="font-weight: 600;">${l.journal} (${l.year})</span> &mdash; PMID: ${l.id}</div>
-              </div>
-              `).join('')}
-            </div>
-          </div>
-        </div>
-
-      </div>
-    `;
-
-    await html2pdf().set({
-      margin: 0,
-      filename: `${report.molecule || 'Molecule'}_Intelligence_Report.pdf`,
-      image: { type: 'jpeg', quality: 1.0 },
-      html2canvas: { scale: 2, useCORS: true, letterRendering: true, backgroundColor: '#ffffff' },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    }).from(html).save();
-    
-  } catch (err) {
-    window.print();
-  }
-  setIsExportingPdf(false);
-};
-
-  const handleExportJson = () => {
-    if (!report) return;
-    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${report.molecule}_report_data.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `${report.molecule || 'report'}-analysis.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to generate PDF. Check the backend logs.');
+    } finally {
+      setIsExportingPdf(false);
+    }
   };
 
   const [dynamicRefs, setDynamicRefs] = useState<any[]>([]);
@@ -1321,31 +1299,32 @@ export default function ReportPage() {
   }, []);
 
   if (loading) return (
-    <div className="min-h-screen bg-[#09090b] text-zinc-300 flex items-center justify-center">
-      <Loader2 size={32} className="animate-spin text-zinc-500" />
+    <div className="min-h-screen bg-[#000000] text-zinc-300 flex flex-col items-center justify-center gap-3">
+      <Loader2 size={28} className="animate-spin text-indigo-400" />
+      <p className="text-sm text-zinc-500">Loading report...</p>
     </div>
   );
 
   if (loadError) return (
-    <div className="min-h-screen bg-[#09090b] text-zinc-300 flex flex-col items-center justify-center gap-4">
-      <ShieldAlert size={32} className="text-rose-500" />
-      <h2 className="text-xl text-zinc-100">Failed to load report</h2>
-      <p className="text-sm text-zinc-500">{loadError}</p>
-      <Button onClick={() => navigate('/search')} className="border border-zinc-700 text-zinc-300 px-4 py-2 rounded-lg">
+    <div className="min-h-screen bg-[#000000] text-zinc-300 flex flex-col items-center justify-center gap-4">
+      <ShieldAlert size={28} className="text-rose-500" />
+      <h2 className="text-lg font-semibold text-zinc-100">Failed to load report</h2>
+      <p className="text-sm text-zinc-400">{loadError}</p>
+      <Button onClick={() => navigate('/search')} className="border border-zinc-800 text-zinc-300 hover:bg-zinc-900 px-4 py-2 rounded-lg">
         Back to Search
       </Button>
     </div>
   );
 
   if (!report || report.error) return (
-    <div className="min-h-screen bg-[#09090b] text-zinc-300 flex flex-col items-center justify-center">
-      <h2 className="text-xl mb-4">Report not found.</h2>
-      <Button onClick={() => navigate('/search')} className="border border-zinc-700 text-zinc-300 px-4 py-2 rounded-lg">Back to Search</Button>
+    <div className="min-h-screen bg-[#000000] text-zinc-300 flex flex-col items-center justify-center gap-4">
+      <h2 className="text-lg font-semibold text-zinc-100">Report not found.</h2>
+      <Button onClick={() => navigate('/search')} className="border border-zinc-800 text-zinc-300 hover:bg-zinc-900 px-4 py-2 rounded-lg">Back to Search</Button>
     </div>
   );
 
   if (report.is_fake) return (
-    <div className="flex-1 bg-[#09090b] text-zinc-200 flex flex-col min-h-screen">
+    <div className="flex-1 bg-[#000000] text-zinc-200 flex flex-col min-h-screen">
       <header className="px-6 lg:px-12 py-8 flex items-center relative z-50">
         <Button variant="ghost" onClick={() => navigate('/search')} className="text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 -ml-4">
           <ArrowLeft size={16} className="mr-2" /> Back to Search
@@ -1408,64 +1387,52 @@ export default function ReportPage() {
   return (
     <ErrorBoundary>
       <div className="min-h-screen bg-[#000000] text-zinc-100 font-sans selection:bg-zinc-800 flex flex-col relative overflow-x-hidden transition-all duration-300">
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:64px_64px] pointer-events-none mix-blend-overlay [mask-image:radial-gradient(ellipse_80%_80%_at_50%_0%,#000_20%,transparent_100%)]"></div>
+        <div className="fixed inset-0 bg-[linear-gradient(rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.025)_1px,transparent_1px)] bg-[size:64px_64px] pointer-events-none [mask-image:radial-gradient(ellipse_90%_60%_at_50%_0%,#000_20%,transparent_100%)]"></div>
         {showSimulation && <DebateSimulation onClose={() => setShowSimulation(false)} />}
 
         <div className="flex-1 flex flex-col transition-all duration-300 overflow-y-auto h-screen relative"
           style={{ marginRight: activeSidebar !== null ? sidebarWidth : 0 }}>
 
-          <header className="px-6 lg:px-12 py-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-50">
+          <header className="px-6 lg:px-12 py-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative z-50">
             <div>
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-1">
                 <Button variant="ghost" size="sm" onClick={() => navigate('/search')}
                   className="text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 -ml-2 h-7 px-2 border-none">
                   <ArrowLeft size={16} className="mr-1 inline" /> Back to Search
                 </Button>
               </div>
-              <h1 className="text-xl font-semibold text-zinc-100 tracking-tight">{report.molecule} Analysis Report</h1>
-              <div className="flex items-center gap-2 mt-2 text-xs font-medium text-zinc-600 uppercase tracking-widest">
-                <span onClick={() => navigate('/search')} className="hover:text-zinc-400 cursor-pointer transition-colors">Search</span>
-                <span>/</span>
+              <h1 className="text-lg font-semibold text-zinc-100 tracking-tight">{report.molecule} Analysis Report</h1>
+              <div className="flex items-center gap-2 mt-1 text-xs font-medium text-zinc-500">
+                <span onClick={() => navigate('/search')} className="hover:text-zinc-300 cursor-pointer transition-colors">Search</span>
+                <span className="text-zinc-700">/</span>
                 <span className="text-zinc-400">{report.molecule}</span>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <button className="p-2 text-zinc-500 hover:text-zinc-300 transition-colors"><Search className="w-4 h-4" /></button>
+            <div className="flex items-center gap-2">
               <button onClick={() => setActiveSidebar(activeSidebar === 'ai' ? null : 'ai')}
-                className={clsx("flex items-center gap-2 px-4 py-2 rounded-lg transition-colors border shadow-sm text-sm font-medium",
-                  activeSidebar === 'ai' ? "bg-indigo-500 text-white border-indigo-600" : "bg-[#121214] hover:bg-[#18181b] border-[#27272a] text-zinc-300")}>
+                className={clsx("flex items-center gap-2 px-3.5 py-2 rounded-lg transition-colors border text-sm font-medium",
+                  activeSidebar === 'ai' ? "bg-indigo-500 text-white border-indigo-600" : "bg-[#161b22] hover:bg-[#1c2128] border-zinc-800 text-zinc-300")}>
                 <Bot className="w-4 h-4" /><span>Ask AI</span>
               </button>
-              <div className="relative">
-                <button onClick={() => setShowExportMenu(m => !m)} disabled={isExportingPdf}
-                  className="flex items-center gap-2 px-4 py-2 bg-zinc-100 hover:bg-white text-zinc-900 rounded-lg transition-colors shadow-sm disabled:opacity-50 border-none">
-                  {isExportingPdf ? <Loader2 size={16} className="animate-spin" /> : <Download className="w-4 h-4" />}
-                  <span className="text-sm font-medium">Export</span>
-                  <ChevronRight size={12} className="rotate-90 opacity-50" />
-                </button>
-                {showExportMenu && (
-                  <div className="absolute right-0 top-full mt-1 bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-xl shadow-2xl overflow-hidden z-50 min-w-[160px]">
-                    <button onClick={() => { setShowExportMenu(false); handleExportPdf(); }}
-                      className="w-full flex items-center gap-2 px-4 py-3 text-sm text-zinc-300 hover:bg-[#18181b] hover:text-white transition-colors">
-                      <Download size={14} /> Export as PDF
-                    </button>
-                    <button onClick={() => { setShowExportMenu(false); handleExportJson(); }}
-                      className="w-full flex items-center gap-2 px-4 py-3 text-sm text-zinc-300 hover:bg-[#18181b] hover:text-white transition-colors border-t border-[#27272a]">
-                      <FileText size={14} /> Export as JSON
-                    </button>
-                  </div>
-                )}
-              </div>
+              <button onClick={handleExportPdf} disabled={isExportingPdf}
+                className="flex items-center gap-2 px-3.5 py-2 bg-zinc-100 hover:bg-white text-zinc-900 rounded-lg transition-colors disabled:opacity-50 border-none text-sm font-medium">
+                {isExportingPdf ? <Loader2 size={16} className="animate-spin" /> : <Download className="w-4 h-4" />}
+                <span>Export PDF</span>
+              </button>
             </div>
           </header>
 
-          {/* Tab navigation — desktop: pill row, mobile: dropdown */}
-          <div className="w-full flex justify-center mb-10 relative z-50 px-6 shrink-0">
+          {/* Tab navigation */}
+          <div className="w-full flex justify-center mb-8 relative z-50 px-6 shrink-0">
             {/* Desktop tabs */}
-            <div className="hidden md:flex items-center bg-black/40 backdrop-blur-md border border-zinc-800/50 p-1 rounded-xl overflow-x-auto no-scrollbar max-w-full">
+            <div className="hidden md:flex items-center border-b border-zinc-800/60 gap-1 w-full max-w-3xl">
               {navItems.map((item) => (
                 <button key={item.id} onClick={() => setActiveTab(item.id)}
-                  className={`px-6 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${activeTab === item.id ? 'bg-[#27272a] text-zinc-100 shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>
+                  className={`px-5 py-2.5 text-sm font-medium transition-all whitespace-nowrap relative ${
+                    activeTab === item.id
+                      ? 'text-zinc-100 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-indigo-500 after:rounded-t'
+                      : 'text-zinc-500 hover:text-zinc-300'
+                  }`}>
                   {item.label}
                 </button>
               ))}
@@ -1524,7 +1491,7 @@ export default function ReportPage() {
 
         {/* Sidebar */}
         <div className={clsx(
-          "fixed top-0 right-0 h-full bg-[#09090b] border-l border-[#27272a] shadow-2xl transition-transform duration-300 transform flex flex-col z-40",
+          "fixed top-0 right-0 h-full bg-[#000000] border-l border-zinc-800/60 shadow-2xl transition-transform duration-300 transform flex flex-col z-40",
           activeSidebar !== null ? "translate-x-0" : "translate-x-full"
         )} style={{ width: sidebarWidth }}>
           <div onMouseDown={startResizing}
@@ -1534,14 +1501,14 @@ export default function ReportPage() {
 
           {activeSidebar === 'ai' && (
             <>
-              <div className="p-4 flex justify-between items-center bg-[#09090b]">
-                <h2 className="font-semibold text-base text-zinc-100 mt-2">Ask about this molecule</h2>
+              <div className="p-4 flex justify-between items-center bg-zinc-950 border-b border-zinc-800/60">
+                <h2 className="font-semibold text-base text-zinc-100">Ask about this molecule</h2>
                 <Button variant="ghost" size="icon" onClick={() => setActiveSidebar(null)} className="text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded-full h-8 w-8 border-none flex items-center justify-center">
                   <X size={16} />
                 </Button>
               </div>
 
-              <div className="flex-1 p-4 overflow-y-auto bg-[#09090b]">
+              <div className="flex-1 p-4 overflow-y-auto bg-[#000000]">
                 {ragMessages.length <= 1 ? (
                   <div className="flex flex-col items-center justify-center text-center h-full pt-6">
                     <div className="bg-zinc-800/50 p-3 rounded-full mb-4">
@@ -1551,7 +1518,7 @@ export default function ReportPage() {
                       Hello! Curious about what you're analyzing? I'm here to help.
                     </h3>
                     <p className="text-sm text-zinc-400 mb-20">
-                      Not sure what to ask? Choose something:
+                      Not sure what to ask? Try one of these:
                     </p>
                     <div className="absolute right-6 bottom-[140px] flex flex-col gap-3 items-end w-full">
                       <button onClick={(e) => handleRagSubmit(e as any, "Summarize the report")} disabled={ragLoading}
@@ -1573,8 +1540,12 @@ export default function ReportPage() {
                           {msg.role === 'user' ? <User size={14} /> : <Sparkles size={14} />}
                         </div>
                         <div className={clsx("px-4 py-2 rounded-2xl max-w-[80%] text-sm leading-relaxed whitespace-pre-wrap",
-                          msg.role === 'user' ? "bg-zinc-800 text-zinc-100" : "bg-[#18181b] border border-[#27272a] text-zinc-300")}>
-                          {msg.content}
+                          msg.role === 'user' ? "bg-zinc-800 text-zinc-100" : "bg-[#18181b] border border-[#27272a] text-zinc-300 [&>p]:mb-2 [&>ul]:list-disc [&>ul]:pl-5 [&>ol]:list-decimal [&>ol]:pl-5 [&>h1]:text-xl [&>h1]:font-bold [&>h2]:text-lg [&>h2]:font-bold [&>h3]:text-base [&>h3]:font-bold [&>p:last-child]:mb-0 [&>strong]:text-zinc-200")}>
+                          {msg.role === 'user' ? (
+                            msg.content
+                          ) : (
+                            <ReactMarkdown>{msg.content}</ReactMarkdown>
+                          )}
                           {msg.role === 'assistant' && msg.content === '' && ragLoading && (
                             <span className="inline-flex items-center gap-1 ml-1">
                               <span className="w-1 h-1 rounded-full bg-zinc-500 animate-bounce"></span>
@@ -1589,22 +1560,22 @@ export default function ReportPage() {
                   </div>
                 )}
               </div>
-              <div className="p-4 border-t-0 bg-[#09090b]">
+              <div className="p-4 border-t border-zinc-800/60 bg-zinc-950">
                 <form className="flex gap-2 relative" onSubmit={(e) => handleRagSubmit(e)}>
                   <Input value={ragInput} onChange={(e: any) => setRagInput(e.target.value)}
                     placeholder="Ask a question..." disabled={ragLoading}
-                    className="flex-1 bg-zinc-900 border-none text-zinc-100 placeholder:text-zinc-500 px-4 py-6 pr-12 focus-visible:ring-1 focus-visible:ring-zinc-700 focus-visible:ring-offset-0 rounded-2xl outline-none" />
+                    className="flex-1 bg-zinc-900/80 border border-zinc-800/60 text-zinc-100 placeholder:text-zinc-500 px-4 py-6 pr-12 focus-visible:ring-1 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-0 rounded-xl outline-none" />
                   <Button type="submit" size="icon" disabled={ragLoading || !ragInput.trim()}
                     className="absolute right-2 top-1/2 -translate-y-1/2 bg-zinc-800 hover:bg-zinc-700 text-white disabled:bg-transparent disabled:text-zinc-600 rounded-full h-8 w-8 flex items-center justify-center border-none">
                     <Send size={14} />
                   </Button>
                 </form>
                 <div className="flex justify-between items-center mt-3 px-1">
-                  <p className="text-[11px] text-zinc-500">
-                    AI can make mistakes, so double-check it. <a href="#" className="underline hover:text-zinc-300">Learn more</a>
+                  <p className="text-xs text-zinc-500">
+                    AI can make mistakes. <a href="#" className="underline hover:text-zinc-300">Learn more</a>
                   </p>
-                  <p className="text-[11px] text-zinc-500 flex items-center gap-1">
-                    Made with <Sparkles size={10} className="inline mr-0.5" /> Gemini <ExternalLink size={10} className="inline ml-0.5 opacity-70" />
+                  <p className="text-xs text-zinc-500 flex items-center gap-1">
+                    <Sparkles size={10} className="inline text-indigo-400" /> Gemini
                   </p>
                 </div>
               </div>
@@ -1613,19 +1584,19 @@ export default function ReportPage() {
 
           {activeSidebar === 'refs' && (
             <>
-              <div className="p-4 border-b border-[#27272a] flex justify-between items-center bg-[#09090b]">
+              <div className="p-4 border-b border-zinc-800/60 flex justify-between items-center bg-zinc-950">
                 <div className="flex items-center gap-2">
                   <div className="bg-zinc-800/50 border border-zinc-700/50 p-2 rounded-full"><FileText size={18} className="text-zinc-300" /></div>
                   <div>
                     <h2 className="font-semibold text-sm text-zinc-100">Sources & Patents</h2>
-                    <p className="text-[10px] text-zinc-500 flex items-center gap-1.5 mt-0.5">{refsFromData.length} References Found</p>
+                    <p className="text-xs text-zinc-500 flex items-center gap-1.5 mt-0.5">{refsFromData.length} references</p>
                   </div>
                 </div>
                 <Button variant="ghost" size="icon" onClick={() => setActiveSidebar(null)} className="text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-full h-8 w-8 border-none flex items-center justify-center">
                   <X size={16} />
                 </Button>
               </div>
-              <div className="flex-1 p-4 overflow-y-auto bg-[#000000]/80 backdrop-blur-md">
+              <div className="flex-1 p-4 overflow-y-auto bg-[#000000]">
                 {refsFromData.length > 0 ? (
                   <div className="flex flex-col gap-4">
                     {refsFromData.map((ref) => (
@@ -1635,7 +1606,7 @@ export default function ReportPage() {
                           highlightedRef === ref.id && "ring-2 ring-zinc-500/50 bg-zinc-900/50 shadow-[0_0_15px_rgba(255,255,255,0.05)] animate-pulse"
                         )}>
                         <div className="flex items-center justify-between mb-3">
-                          <Badge className="bg-zinc-800/50 text-zinc-400 text-[10px] px-2 py-0.5 border border-zinc-800/80 font-medium uppercase tracking-wider">{ref.type}</Badge>
+                          <Badge className="bg-zinc-800/50 text-zinc-400 text-xs px-2 py-0.5 border border-zinc-800/80 font-medium uppercase tracking-wide">{ref.type}</Badge>
                           <span className="text-xs text-zinc-500 font-mono">{ref.year}</span>
                         </div>
                         <h4 className="text-sm font-medium text-zinc-200 mb-2 leading-snug group-hover:text-zinc-100 transition-colors flex-1">{ref.title}</h4>

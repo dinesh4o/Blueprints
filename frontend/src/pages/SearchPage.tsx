@@ -51,6 +51,8 @@ export default function SearchPage() {
   const [portfolioActive, setPortfolioActive] = useState(false);
   const navigate = useNavigate();
 
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     const saved = localStorage.getItem('recent_searches');
     if (saved) {
@@ -61,6 +63,7 @@ export default function SearchPage() {
   useEffect(() => {
     if (query.length < 2) {
       setSuggestions([]);
+      setError(null);
       return;
     }
     const timer = setTimeout(async () => {
@@ -80,6 +83,7 @@ export default function SearchPage() {
   const handleAnalyze = async (molecule: string) => {
     if (!molecule.trim()) return;
     setLoading(true);
+    setError(null);
     
     // Save to recent
     const newRecent = [molecule, ...recent.filter(r => r !== molecule)].slice(0, 5);
@@ -93,11 +97,18 @@ export default function SearchPage() {
         body: JSON.stringify({ molecule }),
       });
       const data = await res.json();
+      
+      if (!res.ok) {
+        setError(data.error || 'Failed to authenticate molecule.');
+        setLoading(false);
+        return;
+      }
+
       if (data.job_id) {
         navigate(`/progress/${data.job_id}`);
       }
     } catch (e) {
-      console.error(e);
+      setError('Network error occurred. Please try again.');
       setLoading(false);
     }
   };
@@ -202,6 +213,19 @@ export default function SearchPage() {
               </button>
             </div>
           </div>
+
+          <AnimatePresence>
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="absolute top-full left-0 right-0 mt-4 p-4 rounded-2xl border border-red-500/30 bg-red-50/80 dark:bg-red-950/30 text-red-600 dark:text-red-400 text-sm font-medium shadow-sm z-10 backdrop-blur-md text-left"
+              >
+                {error}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <AnimatePresence>
             {suggestions.length > 0 && (

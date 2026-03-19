@@ -204,10 +204,14 @@ router.get(
       session: true,
     }),
     (req: Request, res: Response) => {
-      // Successful authentication, redirect to search
-res.redirect(process.env.CLIENT_URL + '/search?login=success');
-
-
+      const clientUrl = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
+      const dest = clientUrl + '/search?login=success';
+      res.setHeader('Content-Type', 'text/html');
+      res.send(
+        '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Redirecting...</title>' +
+        '<script>window.location.replace(' + JSON.stringify(dest) + ');</script></head>' +
+        '<body><p>Redirecting... <a href="' + dest + '">click here</a></p></body></html>'
+      );
     }
 );
 

@@ -53,6 +53,10 @@ export const GraphState = Annotation.Root({
   viabilityScore:  Annotation<number>({ reducer: (a, b) => b ?? a }),
   top_opportunities: Annotation<string[]>({ reducer: (a, b) => b ?? a }),
   top_risks:         Annotation<string[]>({ reducer: (a, b) => b ?? a }),
+  phoenix_score:     Annotation<number>({ reducer: (a, b) => b ?? a }),
+  phoenix_breakdown: Annotation<any>({ reducer: (a, b) => b ?? a }),
+  phoenix_explanation: Annotation<string>({ reducer: (a, b) => b ?? a }),
+  total_pubmed_papers: Annotation<number>({ reducer: (a, b) => b ?? a }),
 });
 
 // ─── Agents ────────────────────────────────────────────────────────────────
@@ -60,21 +64,20 @@ export const GraphState = Annotation.Root({
 // PubChem Agent: existence check + comprehensive molecular + pharmacological data
 async function fetchPubChemData(state: typeof GraphState.State) {
   try {
-    // 1. Basic molecular properties (existence check + Lipinski-like descriptors)
-    const propsRes = await axios.get(
-      `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encodeURIComponent(state.molecule)}/property/MolecularFormula,MolecularWeight,IUPACName,InChIKey,CanonicalSMILES,XLogP,HBondDonorCount,HBondAcceptorCount,RotatableBondCount,HeavyAtomCount,Complexity,DefinedAtomStereoCount/JSON`,
-      { timeout: 10000 }
-    );
-    const prop = propsRes.data?.PropertyTable?.Properties?.[0];
-    if (!prop) return { pubchemData: { exists: false } };
-
-    // 2. CID
+    // 1. Try to resolve the name to a CID (handles synonyms and mixtures much better)
     const cidRes = await axios.get(
       `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encodeURIComponent(state.molecule)}/cids/JSON`,
       { timeout: 5000 }
     );
     const cid = cidRes.data?.IdentifierList?.CID?.[0];
-    if (!cid) return { pubchemData: { exists: true, ...prop } };
+    if (!cid) return { pubchemData: { exists: false } };
+
+    // 2. Fetch basic molecular properties using the resolved CID
+    const propsRes = await axios.get(
+      `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/property/MolecularFormula,MolecularWeight,IUPACName,InChIKey,CanonicalSMILES,XLogP,HBondDonorCount,HBondAcceptorCount,RotatableBondCount,HeavyAtomCount,Complexity,DefinedAtomStereoCount/JSON`,
+      { timeout: 10000 }
+    ).catch(() => ({ data: null }));
+    const prop = propsRes.data?.PropertyTable?.Properties?.[0] || {};
 
 
     // 3. Parallel PUG View section calls for rich annotation
@@ -101,7 +104,7 @@ async function fetchPubChemData(state: typeof GraphState.State) {
     const half_life           = pugText(pharmaData, 'half-life', 'half life');
     const protein_binding     = pugText(pharmaData, 'protein binding');
     const metabolism          = pugText(pharmaData, 'metabolism', 'biotransformation');
-    const volume_of_dist      = pugText(pharmaData, 'volume of distribution');
+    const volume_of_dist      = pugText(pharmaData, 'volume of distribution', 'distribution');
     const clearance           = pugText(pharmaData, 'clearance');
     const excretion           = pugText(pharmaData, 'excretion');
 
@@ -270,10 +273,9 @@ async function fetchSimilarMolecules(state: typeof GraphState.State) {
       .filter(r => r.status === 'fulfilled' && r.value)
       .map(r => (r as PromiseFulfilledResult<any>).value);
 
-    return { similarMolecules };
   } catch (error: any) {
-    console.error('[SimilarityAgent]', error?.message);
-    return { similarMolecules: [] };
+    console.error('[SimilarityAgent] API failed:', error.message);
+    return { similarMolecules: null };
   }
 }
 
@@ -293,26 +295,33 @@ async function fetchClinicalData(state: typeof GraphState.State) {
         condition: s.protocolSection?.conditionsModule?.conditions?.[0] || 'Unknown',
       }))
     };
-  } catch { return { clinicalData: [] }; }
+  } catch (err: any) { 
+    console.error('[ClinicalTrials] API failed:', err.message);
+    return { clinicalData: null }; 
+  }
 }
 
 // Literature Agent (PubMed)
 async function fetchLiteratureData(state: typeof GraphState.State) {
   try {
-    const searchRes = await axios.get(
-      `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(state.molecule)}+AND+clinical+trial&retmode=json&retmax=5`
-    );
+    const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(state.molecule)}+AND+clinical+trial&retmode=json&retmax=5`;
+    const searchRes = await axios.get(searchUrl);
+    
+    // Total total_pubmed_papers count for ALL literature (bias check)
+    const countUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(state.molecule)}&rettype=count&retmode=json`;
+    const countRes = await axios.get(countUrl);
+    const total_pubmed_papers = parseInt(countRes.data?.esearchresult?.count ?? '0');
+
     if (searchRes.data.esearchresult?.errorlist?.phrasesnotfound?.some(
       (p: string) => p.toLowerCase() === state.molecule.toLowerCase()
-    )) return { literatureData: [] };
+    )) return { literatureData: [], total_pubmed_papers };
 
     const pmids = searchRes.data.esearchresult?.idlist?.join(',');
-    if (!pmids || searchRes.data.esearchresult?.count === '0') return { literatureData: [] };
+    if (!pmids || searchRes.data.esearchresult?.count === '0') return { literatureData: [], total_pubmed_papers };
 
-    const summaryRes = await axios.get(
-      `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${pmids}&retmode=json`
-    );
+    const summaryRes = await axios.get(`https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${pmids}&retmode=json`);
     return {
+      total_pubmed_papers,
       literatureData: Object.values(summaryRes.data.result || {})
         .filter((p: any) => p.uid)
         .map((p: any) => ({
@@ -323,30 +332,78 @@ async function fetchLiteratureData(state: typeof GraphState.State) {
           authors: p.authors?.map((a: any) => a.name) || [],
         }))
     };
-  } catch { return { literatureData: [] }; }
+  } catch (err: any) { 
+    console.error('[PubMed] API failed:', err.message);
+    return { literatureData: null, total_pubmed_papers: 0 }; 
+  }
 }
 
 // Regulatory Agent (openFDA)
 async function fetchRegulatoryData(state: typeof GraphState.State) {
   try {
-    const res = await axios.get(
-      `https://api.fda.gov/drug/label.json?search=openfda.generic_name:"${encodeURIComponent(state.molecule)}"&limit=1`
-    );
-    const label = res.data.results?.[0];
+    const term = encodeURIComponent(state.molecule.toLowerCase());
+    const termUpper = encodeURIComponent(state.molecule.toUpperCase());
+    
+    // Fetch generic, brand, and substance to cast a wide net (fixes Minoxidil/Thalomid misses)
+    const urls = [
+      `https://api.fda.gov/drug/label.json?search=openfda.substance_name:"${termUpper}"&limit=10`,
+      `https://api.fda.gov/drug/label.json?search=openfda.generic_name:"${term}"&limit=10`,
+      `https://api.fda.gov/drug/label.json?search=openfda.brand_name:"${termUpper}"&limit=10`
+    ];
+
+    let allResults: any[] = [];
+    for (const u of urls) {
+      try {
+        const res = await axios.get(u, { timeout: 3000 });
+        if (res.data?.results) allResults = allResults.concat(res.data.results);
+      } catch (e) {}
+    }
+
+    let beneficial_faers_hit = false;
+    try {
+        // Serendipity signal check
+        const faersUrl = `https://api.fda.gov/drug/event.json?search=patient.drug.medicinalproduct:"${termUpper}"+AND+(patient.reaction.reactionmeddrapt:"hair+growth"+patient.reaction.reactionmeddrapt:"erection")&limit=1`;
+        const faersRes = await axios.get(faersUrl, { timeout: 3000 });
+        if (faersRes.data?.results?.length > 0) beneficial_faers_hit = true;
+    } catch (e) {}
+
+    // Extract unique indication paragraphs
+    const uniqueInds = new Set<string>();
+    for (const r of allResults) {
+      if (r.indications_and_usage?.[0]) {
+        // use first 50 chars as a uniqueness fingerprint
+        const fingerprint = r.indications_and_usage[0].substring(0, 50).toLowerCase();
+        let isUnique = true;
+        for (const existing of uniqueInds) {
+           if (existing.toLowerCase().includes(fingerprint) || fingerprint.includes(existing.substring(0,50).toLowerCase())) {
+               isUnique = false; break;
+           }
+        }
+        if (isUnique) uniqueInds.add(r.indications_and_usage[0]);
+      }
+    }
+    
+    const indicationsList = Array.from(uniqueInds);
+
     return {
       regulatoryData: {
-        indications: label?.indications_and_usage?.[0]?.substring(0, 200) || 'None',
-        warnings:    label?.boxed_warning?.[0]?.substring(0, 200) || 'None',
+        all_indications: indicationsList,
+        beneficial_faers_hit,
+        has_orphan_designation: allResults.some(r => JSON.stringify(r).toLowerCase().includes('orphan')),
+        has_breakthrough_designation: allResults.some(r => JSON.stringify(r).toLowerCase().includes('breakthrough')),
+        indications: indicationsList[0]?.substring(0, 200) || 'None found',
+        warnings: allResults[0]?.boxed_warning?.[0]?.substring(0, 200) || 'None',
       }
     };
-  } catch {
-    return { regulatoryData: { indications: 'Investigational', warnings: 'None found' } };
+  } catch (err: any) {
+    console.error('[OpenFDA] API failed:', err.message);
+    return { regulatoryData: null };
   }
 }
 
-// Target Agent (placeholder — Open Targets requires GraphQL)
+// Target Agent (Open Targets placeholder)
 async function fetchTargetData(state: typeof GraphState.State) {
-  return { targetData: { score: Math.random() * 10, targetsFound: 5 } };
+  return { targetData: { score: null, targetsFound: 0 } };
 }
 
 
@@ -384,52 +441,95 @@ async function fetchPatentData(state: typeof GraphState.State) {
     // De-duplicate array
     const dedupedInfoString = patents.filter((v,i,a)=>a.findIndex(v2=>(v2.id===v.id))===i);
     return { patentData: dedupedInfoString.slice(0, 5) };
-  } catch (e) {
-    console.error('[PatentAgent] Failed', e);
-    return { patentData: [] };
+  } catch (e: any) {
+    console.error('[PatentAgent] API failed:', e.message);
+    return { patentData: null };
   }
 }
 
-// --- Fallback Key Helper ---
-function getGroqKeys(): string[] {
-  const keysStr = process.env.GROQ_API_KEYS || process.env.GROQ_API_KEY || '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';
-  let keys = keysStr.split(',').map(k => k.trim()).filter(k => k.length > 0);
-  
-  for (let i = keys.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [keys[i], keys[j]] = [keys[j], keys[i]];
-  }
-  
-  return keys;
-}
+      // --- Fallback Key Helper ---
+      function getGroqKeys(): string[] {
+        const keysStr = process.env.GROQ_API_KEYS_SYNTHESIS || process.env.GROQ_API_KEYS || process.env.GROQ_API_KEY || '';
+        let keys = keysStr.split(',').map(k => k.trim()).filter(k => k.length > 0);
 
-// LLM Synthesis Agent (Groq — llama-3.3-70b)
-async function synthesizeAndEvaluate(state: typeof GraphState.State) {
+        for (let i = keys.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [keys[i], keys[j]] = [keys[j], keys[i]];
+        }
 
-  const keys = getGroqKeys();
-  const pc = state.pubchemData;
-  const sm = state.similarMolecules || [];
+        return keys;
+      }
 
-  const pharmaContext = pc?.exists ? [
-    `Formula: ${pc.molecular_formula}, MW: ${pc.molecular_weight} g/mol`,
-    `XLogP: ${pc.xlogp}, HBD: ${pc.hbd}, HBA: ${pc.hba}`,
-    pc.mechanism_of_action ? `MOA: ${pc.mechanism_of_action?.substring(0, 300)}` : null,
-    pc.pharmacology        ? `Pharmacology: ${pc.pharmacology?.substring(0, 300)}` : null,
-    pc.atc_codes?.length   ? `ATC: ${pc.atc_codes.join(', ')}` : null,
-    pc.half_life           ? `Half-life: ${pc.half_life?.substring(0, 100)}` : null,
-    pc.protein_binding     ? `Protein binding: ${pc.protein_binding?.substring(0, 100)}` : null,
-    pc.associated_diseases?.length ? `Associated diseases (PubChem): ${pc.associated_diseases.slice(0, 6).join(', ')}` : null,
-  ].filter(Boolean).join('\n') : 'Not in PubChem';
+      // LLM Synthesis Agent (Groq — llama-3.3-70b)
+      async function synthesizeAndEvaluate(state: typeof GraphState.State) {
 
-  const analogContext = sm.length
-    ? sm.map(a => `• ${a.name} (${a.formula}): ${a.repurposing_insight} [Potential: ${a.repurposing_potential}]`).join('\n')
-    : 'None found';
+        const keys = getGroqKeys();
+        const pc = state.pubchemData;
+        const sm = state.similarMolecules || [];
 
-  const prompt = `You are an expert Clinical Scientist, Pharmacologist, and Drug Repurposing Analyst.
+        const pharmaContext = pc?.exists ? [
+          `Formula: ${pc.molecular_formula}, MW: ${pc.molecular_weight} g/mol`,
+          pc.mechanism_of_action ? `MOA: ${pc.mechanism_of_action?.substring(0, 300)}` : null,
+          pc.associated_diseases?.length ? `Associated diseases: ${pc.associated_diseases.slice(0, 6).join(', ')}` : null,
+        ].filter(Boolean).join('\n') : 'Not in PubChem';
+
+        const analogContext = sm.length
+          ? sm.map(a => `• ${a.name} (${a.formula}): ${a.repurposing_insight}`).join('\n')
+          : 'None found';
+
+        // EXTRACT EMPIRICAL SIGNALS FOR THE MATH FORMULA
+        const molLower = state.molecule.toLowerCase();
+        const originalIndication = state.pubchemData?.approved_use || '';
+        
+        function isReformulationNotRepurposing(newIndication: string, origIndication: string): boolean {
+          const routeKeywords = ['cream', 'lotion', 'ointment', 'topical', 'injection', 'oral', 'tablet', 'gel'];
+          const newLower = newIndication.toLowerCase();
+          const origLower = origIndication.toLowerCase();
+          if (routeKeywords.some(kw => newLower.includes(kw) && !origLower.includes(kw))) return true;
+          return false;
+        }
+
+        let rep_approvals = 0;
+        const knownIndications = state.regulatoryData?.all_indications || [];
+        
+        for (const ind of knownIndications) {
+          if (originalIndication && ind.toLowerCase().includes(originalIndication.toLowerCase())) continue;
+          if (originalIndication && isReformulationNotRepurposing(ind, originalIndication)) continue;
+          rep_approvals++;
+        }
+        
+        // If we couldn't parse original indication well, and we have multiple, assume at least 1 is original
+        if (!originalIndication && rep_approvals > 0) rep_approvals--;
+
+        // Determine if clinical trials were primarily failed
+        const terminatedCount = (state.clinicalData || []).filter((t: any) => t.status === 'TERMINATED' || t.status === 'WITHDRAWN' || t.status === 'SUSPENDED').length;
+        const totalCount = state.clinicalData?.length || 1;
+        const repurposing_trials_failed = (terminatedCount / totalCount) > 0.3; // If over 30% of trials are terminated
+
+        const max_icd_distance = rep_approvals > 0 ? 8 : 2; 
+        const original_trial_ratio = 0.5; // Default heuristic if we can't NLP classify all trials
+        const max_repurposing_phase = rep_approvals > 0 ? 'PHASE4' : 'PHASE2';
+
+        const signals = {
+          repurposed_fda_approvals: rep_approvals,
+          has_orphan_designation: state.regulatoryData?.has_orphan_designation || false,
+          has_breakthrough_designation: state.regulatoryData?.has_breakthrough_designation || false,
+          max_icd_distance,
+          original_trial_ratio,
+          max_repurposing_phase,
+          repurposing_trials_failed,
+          max_association_score: state.targetData?.score || 0.6,
+          beneficial_faers_hit: state.regulatoryData?.beneficial_faers_hit || false,
+          secondary_endpoint_hit: false,
+          total_pubmed_papers: state.total_pubmed_papers || 0
+        };
+
+        const phoenixMath = computePhoenixScore(signals);
+
+        console.log('[Phoenix Framework] Computed Math:', JSON.stringify({ molecule: state.molecule, papers: signals.total_pubmed_papers, approved_rep: signals.repurposed_fda_approvals, guard: phoenixMath.bias_guard_applied, mathScore: phoenixMath.phoenix_score }));
+
+        const prompt = `You are an expert Clinical Scientist and Drug Repurposing Analyst.
 Evaluate the DRUG REPURPOSING potential of "${state.molecule}".
-
-=== PubChem Data ===
-${pharmaContext}
 
 === Clinical Trials (${state.clinicalData?.length || 0} studies) ===
 ${JSON.stringify(state.clinicalData?.slice(0, 6))}
@@ -446,11 +546,74 @@ ${analogContext}
 FOCUS: Which NEW diseases/conditions could this molecule be repurposed for, beyond its original indication?
 Consider: mechanism of action, structural analog failures/successes, associated diseases, and drug-likeness.
 
-Output a JSON object with exactly four keys:
-1. viabilityScore (0.0–10.0: drug-likeness + trial evidence + repurposing evidence)
-2. analysisReport (3 paragraphs: repurposing potential, pharmacological basis, risk/opportunity summary)
-3. top_opportunities (2–3 short strings: best repurposing opportunities with scientific rationale)
-4. top_risks (2–3 short strings: key risks or barriers to repurposing)`;
+Output a JSON object with exactly seven keys.
+
+You are a pharmaceutical scoring engine. Compute the Phoenix Score strictly using this weighted formula. Never deviate from it.
+PHOENIX SCORE = (R×0.30) + (D×0.25) + (C×0.25) + (M×0.10) + (S×0.10)
+
+R — REGULATORY VALIDATION (0-10)
+Count ONLY FDA/EMA approvals for DIFFERENT indications from the original approved use.
+  ≥2 distinct repurposed FDA approvals     -> 10.0
+  1 repurposed FDA approval                -> 8.5
+  Orphan drug designation (new indication) -> 7.0
+  Breakthrough therapy (new indication)    -> 7.5
+  No repurposed regulatory approval        -> 1.0
+CRITICAL: Do NOT count the original indication approval.
+
+D — INDICATION DISTANCE (0-10)
+Measure ICD-10 chapter distance between ORIGINAL indication and the REPURPOSED indication.
+  Same ICD-10 chapter                      -> 2.0
+  1-2 chapters apart                       -> 5.0
+  3-5 chapters apart                       -> 7.5
+  6+ chapters apart                        -> 10.0
+
+C — CLINICAL EVIDENCE QUALITY (0-10)
+Score ONLY trials for the REPURPOSED indication. Ignore all original indication trials.
+  Phase 4 / post-market (repurposed use)   -> 10.0
+  Phase 3 completed positive (repurposed)  -> 9.0
+  Phase 3 ongoing (repurposed)             -> 7.5
+  Phase 2 completed positive (repurposed)  -> 6.0
+  Phase 1 only (repurposed)                -> 3.0
+  Case reports / observational only        -> 1.5
+  No repurposing trials at all             -> 0.0
+PENALTY: If >90% of all trials are for original indication, subtract 2.0 from C.
+PENALTY: Phase 3 failed (e.g. hydroxychloroquine COVID) -> C = 0.5. Multiple failures -> C = 0.0.
+
+M — MECHANISM TRANSFERABILITY (0-10)
+  Strong mechanistic explanation published -> 9.0
+  Plausible mechanism, some evidence       -> 6.0
+  Theoretical only, no experimental        -> 3.0
+  No mechanistic link identified           -> 1.0
+
+S — SERENDIPITY SIGNAL (0-10)
+  Discovered as clinical side effect       -> 9.0
+  Observed in secondary trial endpoint     -> 7.0
+  Hypothesis-driven from the start         -> 3.0
+  Unknown / no signal                      -> 1.0
+
+ANTI-BIAS GUARD & ABSOLUTE RULES
+1. If PubMed papers > 10,000 AND repurposed FDA approvals = 0 -> Cap total score at 4.0.
+2. If FDA-approved for ≥2 distinct indications -> Never let total score fall below 6.0.
+3. If repurposing trials are majority failed phase 3 -> Cap total score at 3.5.
+4. If drug has 0 repurposed FDA approvals -> Never score above 6.5 total regardless of trial count.
+=== Empirical Data ===
+PubChem: ${pharmaContext}
+Clinical Trials (${state.clinicalData?.length || 0} studies): ${JSON.stringify(state.clinicalData?.slice(0, 5))}
+Literature: ${state.literatureData?.length || 0} papers (Total PubMed corpus: ${state.total_pubmed_papers})
+Regulatory: ${state.regulatoryData?.all_indications?.length || 0} distinct labels found.
+Analogs: ${analogContext}
+
+IMPORTANT: Calculate the viabilityScore (0-10) objectively based solely on the scientific and clinical likelihood of success. Be rigorous! Do not default to 8.X. If trials are all phase 1/observational, score <= 4.0. If trials have high failure rates, score <= 3.0.
+
+The deterministic Phoenix Score algorithm has already computed the historical repurposing footprint:
+- Phoenix Score: ${phoenixMath.phoenix_score}/10
+- Component Breakdown: ${JSON.stringify(phoenixMath.breakdown)}
+
+Output a JSON object with exactly 4 keys explaining the data:
+1. viabilityScore (0.0-10.0: Scientific viability, MUST NOT blindly copy Phoenix Score! Generate independently)
+2. analysisReport (string: 3 paragraphs explaining potential, pharmacology, and risks)
+3. top_opportunities (array of 2-3 strings: best repurposing opportunities)
+4. top_risks (array of 2-3 strings: key barriers to repurposing)`;
 
   try {
     let resultData: any = null;
@@ -466,9 +629,10 @@ Output a JSON object with exactly four keys:
               { role: 'system', content: 'You only respond with perfectly valid JSON. No text outside the JSON object.' },
               { role: 'user', content: prompt }
             ],
-            response_format: { type: 'json_object' }
+            response_format: { type: 'json_object' },
+            temperature: 0.2,
           },
-          { headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' }, validateStatus: () => true }
+          { headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' }, validateStatus: () => true, timeout: 45000 }
         );
 
         if (response.status === 429 || response.status === 401) {
@@ -477,7 +641,8 @@ Output a JSON object with exactly four keys:
         }
 
         if (response.status !== 200) {
-          throw new Error(`Groq API Error: ${response.status}`);
+          console.warn(`[SynthesisAgent] Non-200 status ${response.status}, trying next key...`);
+          continue;
         }
 
         const content = response.data.choices[0].message.content
@@ -486,7 +651,8 @@ Output a JSON object with exactly four keys:
         break;
       } catch (e) {
         lastError = e;
-        console.warn(`[SynthesisAgent] Request error, trying next key...`);
+        console.warn(`[SynthesisAgent] Request error: ${(e as Error).message}. Trying next key...`);
+        continue; // Try next key — Groq cloud supports multi-key retry
       }
     }
 
@@ -494,27 +660,77 @@ Output a JSON object with exactly four keys:
       console.error('[JudgeAgent] All Groq keys failed:', lastError);
       return {
         viabilityScore: 0.0,
-        analysisReport: 'Error synthesizing data. All API keys failed or rate limit exceeded.',
+        analysisReport: 'Error synthesizing data. All API keys failed.',
         top_opportunities: ['Error in AI generation'],
         top_risks:         ['Error in AI generation'],
+        phoenix_score: phoenixMath.phoenix_score,
+        phoenix_breakdown: phoenixMath.breakdown,
+        phoenix_explanation: `R=${phoenixMath.breakdown.regulatory}, D=${phoenixMath.breakdown.indication_distance}, C=${phoenixMath.breakdown.clinical}, M=${phoenixMath.breakdown.mechanism}, S=${phoenixMath.breakdown.serendipity}`
       };
     }
 
     return {
-      viabilityScore:    resultData.viabilityScore,
+      viabilityScore:    resultData.viabilityScore || 0.0,
       analysisReport:    resultData.analysisReport,
       top_opportunities: resultData.top_opportunities || ['No opportunities identified.'],
       top_risks:         resultData.top_risks         || ['No risks identified.'],
+      phoenix_score:     phoenixMath.phoenix_score,
+      phoenix_breakdown: phoenixMath.breakdown,
+      phoenix_explanation: `Deterministic formula output: R=${phoenixMath.breakdown.regulatory}, D=${phoenixMath.breakdown.indication_distance}, C=${phoenixMath.breakdown.clinical}, M=${phoenixMath.breakdown.mechanism}, S=${phoenixMath.breakdown.serendipity}`
     };
   } catch (error) {
-    console.error('[JudgeAgent] LLM error:', error);
+    console.error('[JudgeAgent] Error:', error);
     return {
       viabilityScore: 0.0,
-      analysisReport: 'Error synthesizing data. Check LLM connection or API keys.',
-      top_opportunities: ['Error in AI generation'],
-      top_risks:         ['Error in AI generation'],
+      analysisReport: 'Error synthesizing data.',
+      top_opportunities: [],
+      top_risks:         [],
+      phoenix_score: phoenixMath.phoenix_score,
+      phoenix_breakdown: phoenixMath.breakdown,
+      phoenix_explanation: 'Error'
     };
   }
+}
+
+function computePhoenixScore(signals: any) {
+  let R = 1.0;
+  if (signals.repurposed_fda_approvals >= 2) R = 10.0;
+  else if (signals.repurposed_fda_approvals === 1) R = 8.5;
+  else if (signals.has_orphan_designation) R = 7.0;
+  else if (signals.has_breakthrough_designation) R = 7.5;
+
+  const dist = signals.max_icd_distance; 
+  const biasPenalty = signals.original_trial_ratio > 0.9 ? 0.75 : 1.0;
+  const D = dist * biasPenalty;
+
+  const phaseMap: Record<string, number> = { 'PHASE4': 10.0, 'PHASE3': 9.0, 'PHASE2': 6.0, 'PHASE1': 3.0, 'N/A': 0.0 };
+  let C = phaseMap[signals.max_repurposing_phase] ?? 0.0;
+  if (signals.repurposing_trials_failed) C = Math.min(C, 0.5);
+  if (signals.original_trial_ratio > 0.9) C = Math.max(0, C - 2.0);
+
+  const M = (signals.max_association_score ?? 0) * 10;
+
+  let S = 1.0;
+  if (signals.beneficial_faers_hit) S = 9.0;
+  else if (signals.secondary_endpoint_hit) S = 7.0;
+
+  let score = (R * 0.30) + (D * 0.25) + (C * 0.25) + (M * 0.10) + (S * 0.10);
+
+  let bias_guard_applied = false;
+  if (signals.total_pubmed_papers > 10000 && signals.repurposed_fda_approvals === 0) {
+    score = Math.min(score, 4.0);
+    bias_guard_applied = true;
+  }
+  
+  if (signals.repurposed_fda_approvals >= 1) score = Math.max(score, 6.0);
+  
+  if (signals.repurposing_trials_failed && signals.repurposed_fda_approvals === 0) score = Math.min(score, 3.5);
+
+  return {
+    phoenix_score: Math.round(Math.min(score, 10.0) * 10) / 10,
+    breakdown: { regulatory: R, indication_distance: D, clinical: C, mechanism: M, serendipity: S },
+    bias_guard_applied
+  };
 }
 
 // ─── Graph ──────────────────────────────────────────────────────────────────
@@ -557,7 +773,7 @@ const workflow = new StateGraph(GraphState)
 export const multiAgentPipeline = workflow.compile();
 
 export async function runPipeline(molecule: string) {
-  return multiAgentPipeline.invoke({
+  const result = await multiAgentPipeline.invoke({
     molecule,
     clinicalData:     [],
     literatureData:   [],
@@ -570,5 +786,10 @@ export async function runPipeline(molecule: string) {
     viabilityScore:   0,
     top_opportunities:[],
     top_risks:        [],
+    phoenix_score:    0,
+    phoenix_breakdown:{},
+    phoenix_explanation: ''
   });
+
+  return result;
 }

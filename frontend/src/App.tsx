@@ -25,7 +25,7 @@ const PageLoader = () => (
 
 export default function App() {
   return (
-    <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
+    <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
       <AuthProvider>
         <BrowserRouter>
           <div className="min-h-screen bg-background text-foreground flex flex-col relative overflow-x-hidden">

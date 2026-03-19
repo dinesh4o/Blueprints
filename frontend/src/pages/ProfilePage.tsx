@@ -119,10 +119,13 @@ export function ProfilePage() {
   const initials = (user?.name || user?.email || 'U').charAt(0).toUpperCase();
 
   return (
-    <div className="flex-1 flex flex-col items-center p-6 relative w-full min-h-screen">
+    <main className="bg-[#f8fafc] dark:bg-[#000000] text-zinc-900 dark:text-[#ededed] font-sans selection:bg-zinc-200 dark:selection:bg-zinc-800 relative overflow-x-hidden min-h-screen flex flex-col items-center p-6">
+      
+      {/* Fixed background grid */}
+      <div className="fixed inset-0 bg-[linear-gradient(rgba(0,0,0,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.025)_1px,transparent_1px)] dark:bg-[linear-gradient(rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.025)_1px,transparent_1px)] bg-[size:64px_64px] pointer-events-none [mask-image:radial-gradient(ellipse_90%_70%_at_50%_30%,#000_10%,transparent_100%)] z-0" />
 
       {/* Back button */}
-      <div className="w-full max-w-2xl mb-6">
+      <div className="w-full max-w-2xl mb-6 relative z-10">
         <Button
           variant="ghost"
           onClick={() => navigate(-1)}
@@ -376,6 +379,6 @@ export function ProfilePage() {
           </form>
         </div>
       </motion.div>
-    </div>
+    </main>
   );
 }

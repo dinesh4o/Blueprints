@@ -104,7 +104,7 @@ async function fetchPubChemData(state: typeof GraphState.State) {
     const half_life           = pugText(pharmaData, 'half-life', 'half life');
     const protein_binding     = pugText(pharmaData, 'protein binding');
     const metabolism          = pugText(pharmaData, 'metabolism', 'biotransformation');
-    const volume_of_dist      = pugText(pharmaData, 'volume of distribution');
+    const volume_of_dist      = pugText(pharmaData, 'volume of distribution', 'distribution');
     const clearance           = pugText(pharmaData, 'clearance');
 
     // ── Extract Drug & Medication Info
@@ -640,7 +640,8 @@ Output a JSON object with exactly four keys:
         break;
       } catch (e) {
         lastError = e;
-        console.warn(`[SynthesisAgent] Fetched failed, trying next key...`);
+        console.warn(`[SynthesisAgent] Fetched failed. Breaking loop to avoid queuing local LLM.`);
+        break;
       }
     }
     
