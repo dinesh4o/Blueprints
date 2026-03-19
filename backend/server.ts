@@ -355,7 +355,7 @@ async function startServer() {
     if (keys.length === 0) {
       return res.status(500).json({ error: 'GROQ_API_KEYS not configured on the server.' });
     }
-
+// 
     const mol       = report?.molecule || 'Unknown compound';
     const topOpp    = (report?.repurposing_candidates || []).slice(0, 3)
       .map((c: any) => `${c.condition} (viability: ${c.repurposing_score}/10)`).join('; ');
