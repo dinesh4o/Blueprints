@@ -67,6 +67,7 @@ GROQ_KEY=$GROQ_API_KEYS
 
 ```bash
 cd backend
+npm run setup
 npm install
 # Boots up tsx server.ts with live API routes and SSE streams
 npm run dev
