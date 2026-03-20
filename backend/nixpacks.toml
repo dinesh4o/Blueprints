@@ -1,0 +1,10 @@
+providers = ["node", "python"]
+
+[phases.install]
+cmds = [
+    "npm install --legacy-peer-deps",
+    "pip install -r requirements.txt"
+]
+
+[start]
+cmd = "npx tsx server.ts"
