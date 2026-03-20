@@ -27,9 +27,9 @@ app.include_router(phoenix_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        os.environ.get("CLIENT_URL", "http://localhost:5173"),
-        "http://localhost:3000",
-        "http://localhost:5173",
+        os.environ.get("CLIENT_URL", "https://luvara.vercel.app"),
+        "https://luvara.vercel.app",
+        "https://blueprints-backend-yc9s.onrender.com",
     ],
     allow_methods=["POST", "GET", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],

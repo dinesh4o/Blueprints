@@ -200,11 +200,11 @@ router.get(
 router.get(
   '/google/callback',
   passport.authenticate('google', {
-      failureRedirect: `${process.env.CLIENT_URL || 'http://localhost:5173'}/?error=auth_failed`,
+      failureRedirect: `${process.env.CLIENT_URL || 'https://luvara.vercel.app'}/?error=auth_failed`,
       session: true,
     }),
     (req: Request, res: Response) => {
-      const clientUrl = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
+      const clientUrl = (process.env.CLIENT_URL || 'https://luvara.vercel.app').replace(/\/$/, '');
       const dest = clientUrl + '/search?login=success';
       res.setHeader('Content-Type', 'text/html');
       res.send(

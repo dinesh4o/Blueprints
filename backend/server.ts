@@ -303,13 +303,17 @@ async function startServer() {
 
   const app = express();
   const PORT = parseInt(process.env.PORT || '3000', 10);
+
+  // Trust first proxy (Render, Railway, etc.) so secure cookies work behind reverse proxies
+  app.set('trust proxy', 1);
+
   if (!process.env.SESSION_SECRET) {
     console.warn('[Security] SESSION_SECRET not set — using insecure fallback. Set SESSION_SECRET in .env for production.');
   }
 
   // CORS configuration
   app.use(cors({
-    origin: process.env.CLIENT_URL || 'http://localhost:3000',
+    origin: process.env.CLIENT_URL || 'https://luvara.vercel.app',
     credentials: true,
   }));
 
