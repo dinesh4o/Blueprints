@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://blueprints-backend-yc9s.onrender.com/api/$1"
+    }
+  ]
+}
