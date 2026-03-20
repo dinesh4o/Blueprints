@@ -8,8 +8,7 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID || '',
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-      // Explicitly hardcode the HTTPS URL so Render's internal HTTP proxy does not trick Google
-      callbackURL: 'https://blueprints-backend-yc9s.onrender.com/api/auth/google/callback',
+      callbackURL: `${process.env.CLIENT_URL || 'https://luvara.vercel.app'}/api/auth/google/callback`,
       proxy: true,
     },
     async (accessToken, refreshToken, profile, done) => {
