@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: blueprints-backend
+    env: node
+    rootDir: .
+    plan: free
+    buildCommand: npm install --legacy-peer-deps && pip install -r requirements.txt
+    startCommand: npx tsx backend/server.ts
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: NODE_ENV
+        value: production
+
+  - type: web
+    name: blueprints-frontend
+    env: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    autoDeploy: true
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
