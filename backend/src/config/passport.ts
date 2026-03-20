@@ -8,7 +8,9 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID || '',
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-      callbackURL: '/api/auth/google/callback',
+      // Explicitly hardcode the HTTPS URL so Render's internal HTTP proxy does not trick Google
+      callbackURL: 'https://blueprints-backend-yc9s.onrender.com/api/auth/google/callback',
+      proxy: true,
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
