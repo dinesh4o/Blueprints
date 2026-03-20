@@ -9,7 +9,9 @@ import operator
 # Core LangGraph imports
 from langgraph.graph import StateGraph, START, END
 from dotenv import load_dotenv
+import os
 
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env'))
 load_dotenv()
 
 # 1. Define the State schema using TypedDict

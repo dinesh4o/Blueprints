@@ -1,8 +1,11 @@
 // Load environment variables first
-import 'dotenv/config';
-import express from 'express';
-
+import * as dotenv from 'dotenv';
 import path from 'path';
+
+dotenv.config({ path: path.resolve(__dirname, '../../.env') }); // Root .env or specific fallback
+dotenv.config(); // fallback to local just in case
+
+import express from 'express';
 import crypto from 'crypto';
 import session from 'express-session';
 import MongoStore from 'connect-mongo';
@@ -11,6 +14,7 @@ import cors from 'cors';
 import { connectDB } from './src/config/database';
 import passportConfig from './src/config/passport';
 import authRoutes from './src/routes/auth';
+import communityRoutes from './src/routes/community';
 
 import { generateReportLaTeX } from './src/lib/pdfGenerator';
 
@@ -331,6 +335,7 @@ async function startServer() {
 
   // Authentication routes
   app.use('/api/auth', authRoutes);
+  app.use('/api/community', communityRoutes);
 
   // In-memory store for jobs and reports (simulating MongoDB)
   const jobs = new Map<string, any>();

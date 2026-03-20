@@ -5,7 +5,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, List, Any
 from dotenv import load_dotenv
+import os
 
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env'))
 load_dotenv()
 
 # Chroma and LangChain
