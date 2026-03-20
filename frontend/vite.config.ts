@@ -4,8 +4,9 @@ import path from 'path';
 import {defineConfig, loadEnv} from 'vite';
 
 export default defineConfig(({mode}) => {
-  const env = loadEnv(mode, '.', '');
+  const env = loadEnv(mode, path.resolve(__dirname, '..'), '');
   return {
+    envDir: '..',
     plugins: [react(), tailwindcss()],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
@@ -16,6 +17,10 @@ export default defineConfig(({mode}) => {
       },
     },
     server: {
+      host: '0.0.0.0',          // 🔥 important (not just true)
+      port: 5173,
+      strictPort: true,
+      allowedHosts: true,  
       fs: {
         allow: ['..'],
       },

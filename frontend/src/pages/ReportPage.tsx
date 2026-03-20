@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Database, ChevronRight, Search, Download, LayoutGrid, List, Activity, X, Play, Gavel, Bot, ShieldAlert, Scale,
   MessageCircle, ExternalLink, Atom, Box, CheckCircle, TrendingUp, Target, Pill, Zap, Clock, Droplets, GitCompare,
-  User, Send, Loader2, BookOpen, ArrowLeft, FlaskConical, DollarSign, FileText, Beaker, Fingerprint, Network,
+  User, Users, Send, Loader2, BookOpen, ArrowLeft, FlaskConical, DollarSign, FileText, Beaker, Fingerprint, Network,
   BarChart3, PieChart as PieChartIcon, LineChart as LineChartIcon, ChevronDown, Sparkles, AlertTriangle
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -24,6 +24,7 @@ import { SourceBadge } from '@/components/SourceBadge';
 import { AISynthesisTab } from './AISynthesisPage';
 import ReactMarkdown from 'react-markdown';
 import { exportResearchPaper } from '@/lib/ResearchPaperExport';
+import { ShaderButton } from '@/components/ui/ShaderButton';
 
 type Tab = 'overview' | 'science' | 'market' | 'twin' | 'synthesis';
 
@@ -52,7 +53,7 @@ const GaugeScore = ({ score, max, title, subtitle }: any) => {
     : 'text-rose-400';
 
   return (
-    <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-5 flex flex-col items-center justify-between h-full min-h-[170px]">
+    <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-5 flex flex-col items-center justify-between h-full min-h-[180px]">
       <h3 className="text-zinc-400 text-xs w-full text-left font-medium uppercase tracking-wider">{title}</h3>
       <div className="relative w-full flex-1 flex items-center justify-center mt-3">
         <svg viewBox="0 0 100 60" className="w-[110px] overflow-visible">
@@ -66,17 +67,16 @@ const GaugeScore = ({ score, max, title, subtitle }: any) => {
               style={{ transform: `rotate(${pct * 180}deg)`, transformOrigin: '50px 50px', transition: 'transform 1.2s cubic-bezier(0.4,0,0.2,1)' }} />
           )}
         </svg>
-        <div className="absolute bottom-[-12px] flex flex-col items-center">
+        <div className="absolute bottom-[-24px] flex flex-col items-center">
           {score != null ? (
-            <span className={`text-lg font-semibold ${textColor}`}>
-              {score.toFixed(1)}<span className="text-xs text-zinc-600 font-normal">/{max}</span>
+            <span className={`text-4xl font-mono font-black tracking-tight mt-2 ${textColor}`}>
+              {score.toFixed(1)}<span className="text-lg text-zinc-600 font-medium ml-1">/{max}</span>
             </span>
           ) : (
             <span className="text-sm font-medium text-zinc-600 italic">N/A</span>
           )}
         </div>
       </div>
-      {subtitle && <p className="text-xs text-zinc-500 mt-5 text-center">{subtitle}</p>}
     </div>
   );
 };
@@ -106,7 +106,7 @@ const DebateSimulation = ({ onClose }: { onClose: () => void }) => {
       `}</style>
       <header className="flex justify-between items-center p-6 border-b border-zinc-800 bg-[#09090b]">
         <div className="flex items-center gap-3">
-          <Activity className="w-5 h-5 text-indigo-500" />
+          <Activity className="w-5 h-5 text-cyan-500" />
           <h2 className="text-lg font-medium tracking-wide">Multi-Agent Efficacy Analysis</h2>
           <span className="px-2 py-0.5 bg-zinc-800 text-zinc-400 text-xs rounded uppercase tracking-widest ml-4">Live Debate</span>
         </div>
@@ -189,7 +189,7 @@ const DrugRepurposingCandidates = ({ data }: { data: DrugRepurposingCandidateDat
   <div className="mb-10 animate-in fade-in duration-500">
     <div className="flex items-center justify-between mb-6">
       <h3 className="text-xl font-medium text-zinc-100 flex items-center gap-2">
-        <Target className="w-5 h-5 text-indigo-400" /> Repurposing Trajectories
+        <Target className="w-5 h-5 text-cyan-400" /> Repurposing Trajectories
       </h3>
     </div>
     {data && data.length > 0 ? (
@@ -199,7 +199,7 @@ const DrugRepurposingCandidates = ({ data }: { data: DrugRepurposingCandidateDat
             className="bg-black/40 backdrop-blur-md border border-zinc-800/50 hover:border-zinc-700 transition-all rounded-2xl p-6 group flex flex-col justify-between">
             <div className="flex justify-between items-start mb-6">
               <div>
-                <h4 className="text-lg font-medium text-zinc-100 mb-1 group-hover:text-indigo-400 transition-colors">{candidate.drugName}</h4>
+                <h4 className="text-lg font-medium text-zinc-100 mb-1 group-hover:text-cyan-400 transition-colors">{candidate.drugName}</h4>
                 <span className="text-xs text-zinc-500 bg-zinc-800/50 px-2 py-1 rounded-md uppercase tracking-wider">{candidate.mechanism}</span>
               </div>
               <div className="flex flex-col items-end">
@@ -216,7 +216,7 @@ const DrugRepurposingCandidates = ({ data }: { data: DrugRepurposingCandidateDat
                 <div className="flex gap-1 h-1.5">
                   {[1, 2, 3, 4].map((step) => {
                     const phaseNum = parseInt(candidate.phase.replace(/\D/g, '')) || 0;
-                    return <div key={step} className={clsx("flex-1 rounded-full", step <= phaseNum ? "bg-indigo-500" : "bg-zinc-800")} />;
+                    return <div key={step} className={clsx("flex-1 rounded-full", step <= phaseNum ? "bg-cyan-500" : "bg-zinc-800")} />;
                   })}
                 </div>
               </div>
@@ -261,7 +261,7 @@ const ADMERow = ({ label, value, icon: Icon }: any) => {
     <div className="flex flex-col md:flex-row gap-5 p-5 bg-zinc-950/40 border border-zinc-800/60 rounded-xl hover:border-zinc-700 transition-colors">
       <div className="flex items-center gap-3 md:w-48 shrink-0">
         <div className="w-8 h-8 rounded-full bg-zinc-900 flex items-center justify-center border border-zinc-800">
-           <Icon className="w-4 h-4 text-indigo-400" />
+           <Icon className="w-4 h-4 text-cyan-400" />
         </div>
         <span className="text-sm font-medium text-zinc-200 uppercase tracking-wider">{label}</span>
       </div>
@@ -279,8 +279,8 @@ const PharmacologicalProfileSection = ({ data }: { data: PharmacologicalProfileD
   return (
     <div className="mb-10 animate-in fade-in duration-500">
       <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
-          <FlaskConical className="w-5 h-5 text-indigo-400" />
+        <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
+          <FlaskConical className="w-5 h-5 text-cyan-400" />
         </div>
         <div>
           <h3 className="text-xl font-medium text-zinc-100">Pharmacokinetics (ADME)</h3>
@@ -291,7 +291,7 @@ const PharmacologicalProfileSection = ({ data }: { data: PharmacologicalProfileD
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-9 space-y-3">
           {data.overview && data.overview.toLowerCase() !== 'unknown' && (
-            <p className="text-sm text-zinc-400 leading-relaxed mb-6 px-4 py-3 bg-zinc-900/30 rounded-lg border-l-2 border-indigo-500/50">{data.overview}</p>
+            <p className="text-sm text-zinc-400 leading-relaxed mb-6 px-4 py-3 bg-zinc-900/30 rounded-lg border-l-2 border-cyan-500/50">{data.overview}</p>
           )}
           <ADMERow label="Absorption" value={data.absorption} icon={Droplets} />
           <ADMERow label="Distribution" value={data.distribution} icon={Network} />
@@ -301,9 +301,9 @@ const PharmacologicalProfileSection = ({ data }: { data: PharmacologicalProfileD
         
         <div className="lg:col-span-3">
           <div className="bg-zinc-900/40 backdrop-blur-md border border-zinc-800/60 rounded-2xl p-6 flex flex-col items-center justify-center text-center relative overflow-hidden h-full min-h-[220px]">
-            <div className="absolute top-0 rotate-180 w-full h-1/2 bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.1)_0%,transparent_70%)]"></div>
+            <div className="absolute top-0 rotate-180 w-full h-1/2 bg-[radial-gradient(ellipse_at_top,rgba(6,182,212,0.1)_0%,transparent_70%)]"></div>
             <div className="w-12 h-12 rounded-full bg-zinc-950 border border-zinc-800 flex items-center justify-center mb-6 relative z-10 shadow-lg">
-              <Clock className="w-5 h-5 text-indigo-400" />
+              <Clock className="w-5 h-5 text-cyan-400" />
             </div>
             <span className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-3 relative z-10">Estimated Half-Life</span>
             <span className={clsx("font-light relative z-10", isUnknownHL ? "text-zinc-600 italic text-lg" : "text-zinc-100 text-2xl")}>
@@ -394,14 +394,14 @@ const ExecutiveSynthesisSection = ({ data }: { data: ExecutiveSynthesisData }) =
     <div className="bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-2xl p-8 mb-8">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-medium text-zinc-100 flex items-center gap-2">
-          <Bot className="w-5 h-5 text-indigo-400" /> Executive Synthesis
+          <Bot className="w-5 h-5 text-cyan-400" /> Executive Synthesis
         </h3>
         <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium px-3 py-1 rounded-full">{data.systemStatus}</Badge>
       </div>
       <p className="text-zinc-400 text-sm leading-relaxed mb-2">{displayText}</p>
       {isLong && (
         <button onClick={() => setExpanded(e => !e)}
-          className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors mb-4 flex items-center gap-1">
+          className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors mb-4 flex items-center gap-1">
           {expanded ? 'Show less' : 'Read full analysis'}
           <ChevronDown size={12} className={clsx('transition-transform', expanded && 'rotate-180')} />
         </button>
@@ -437,93 +437,6 @@ const ExecutiveSynthesisSection = ({ data }: { data: ExecutiveSynthesisData }) =
 };
 
 
-interface PhoenixBreakdownPanelProps {
-  breakdown: {
-    regulatory?: number;
-    indication_distance?: number;
-    clinical?: number;
-    mechanism?: number;
-    serendipity?: number;
-    indication_count?: number;
-    max_phase?: string;
-    ot_score?: number;
-    original_indication?: string;
-  };
-  explanation: string;
-  score: number | null;
-}
-
-const PhoenixBreakdownPanel: React.FC<PhoenixBreakdownPanelProps> = ({ breakdown, explanation, score }) => {
-  const pillars = [
-    { label: 'Regulatory Evidence', key: 'regulatory', weight: '30%', description: 'FDA approvals & indication count' },
-    { label: 'Indication Distance', key: 'indication_distance', weight: '25%', description: 'Therapeutic distance from original indication' },
-    { label: 'Clinical Evidence', key: 'clinical', weight: '25%', description: 'Phase & trial count signals' },
-    { label: 'Mechanism Score', key: 'mechanism', weight: '10%', description: 'Target association strength (Open Targets)' },
-    { label: 'Serendipity', key: 'serendipity', weight: '10%', description: 'Beneficial FAERS hits & secondary endpoints' },
-  ] as const;
-
-  return (
-    <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-6 mb-8 animate-in fade-in duration-500">
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-2">
-          <BarChart3 className="w-4 h-4 text-indigo-400" />
-          <h3 className="text-sm font-semibold text-zinc-100">Phoenix Score Breakdown</h3>
-        </div>
-        {score != null && (
-          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded border ${
-            score >= 7.5 ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
-            : score >= 5.0 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20'
-            : 'text-rose-400 bg-rose-500/10 border-rose-500/20'
-          }`}>
-            {score.toFixed(1)} / 10
-          </span>
-        )}
-      </div>
-
-      <div className="space-y-3 mb-5">
-        {pillars.map(({ label, key, weight, description }) => {
-          const val = breakdown[key] ?? 0;
-          const pct = Math.min((val / 10) * 100, 100);
-          const barColor = val >= 7.5 ? 'bg-emerald-500' : val >= 4 ? 'bg-indigo-500' : 'bg-zinc-600';
-          return (
-            <div key={key}>
-              <div className="flex items-center justify-between mb-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-zinc-200 font-medium">{label}</span>
-                  <span className="text-xs text-zinc-500 hidden sm:inline">{description}</span>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs text-zinc-500 font-mono">{weight}</span>
-                  <span className="text-sm text-zinc-300 font-mono w-8 text-right">{val.toFixed(1)}</span>
-                </div>
-              </div>
-              <div className="h-1 w-full bg-zinc-800/80 rounded-full overflow-hidden">
-                <motion.div className={`h-full rounded-full ${barColor}`}
-                  initial={{ width: 0 }} animate={{ width: `${pct}%` }}
-                  transition={{ duration: 0.8, ease: 'easeOut', delay: 0.1 }} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {breakdown.original_indication && (
-        <div className="flex items-center gap-3 text-xs text-zinc-400 mb-4 pt-3 border-t border-zinc-800/60">
-          <span className="text-zinc-500 uppercase tracking-wider">Original Indication</span>
-          <span className="text-zinc-300">{breakdown.original_indication}</span>
-          {breakdown.max_phase && (
-            <><span className="text-zinc-700">·</span><span className="text-zinc-400">{breakdown.max_phase}</span></>
-          )}
-        </div>
-      )}
-
-      {explanation && (
-        <p className="text-sm text-zinc-400 leading-relaxed border-t border-zinc-800/60 pt-4">{explanation}</p>
-      )}
-    </div>
-  );
-};
-
 interface StructuralAnalysisLeadData {
 
   moleculeName: string;
@@ -536,19 +449,19 @@ interface StructuralAnalysisLeadData {
 const StructuralAnalysisList = ({ data }: { data: StructuralAnalysisLeadData[] }) => (
   <div className="mb-8 animate-in fade-in duration-500">
     <h3 className="text-xl font-medium text-zinc-100 mb-6 flex items-center gap-2">
-      <GitCompare className="w-5 h-5 text-indigo-400" /> Structural Analogs
+      <GitCompare className="w-5 h-5 text-cyan-400" /> Structural Analogs
     </h3>
     {data && data.length > 0 ? (
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {data.map((item, idx) => (
           <div key={idx} className="bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-2xl p-6 relative overflow-hidden group">
-            <div className="absolute -right-6 -top-6 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl group-hover:bg-indigo-500/10 transition-colors"></div>
+            <div className="absolute -right-6 -top-6 w-24 h-24 bg-cyan-500/5 rounded-full blur-2xl group-hover:bg-cyan-500/10 transition-colors"></div>
             <div className="flex justify-between items-start mb-4">
               <div>
                 <h4 className="text-base font-medium text-zinc-100">{item.moleculeName}</h4>
                 <p className="text-xs text-zinc-500 mt-1">{item.mechanismMatch} Match</p>
               </div>
-              <div className="bg-[#09090b] border border-[#27272a] px-2 py-1 rounded-md text-xs font-mono text-indigo-400">
+              <div className="bg-[#09090b] border border-[#27272a] px-2 py-1 rounded-md text-xs font-mono text-cyan-400">
                 {(Number(item.similarityScore) * 100).toFixed(1)}%
               </div>
             </div>
@@ -626,7 +539,7 @@ interface ClinicalTrialData {
 const ClinicalTrialOverview = ({ data }: { data: ClinicalTrialData[] }) => (
   <div className="mb-10 animate-in fade-in duration-500">
     <h3 className="text-xl font-medium text-zinc-100 mb-6 flex items-center gap-2">
-      <Activity className="w-5 h-5 text-indigo-400" /> Clinical Pipeline
+      <Activity className="w-5 h-5 text-cyan-400" /> Clinical Pipeline
       <SourceBadge api="ClinicalTrials.gov v2" endpoint="/api/v2/studies?query.term={molecule}&pageSize=50" url="https://clinicaltrials.gov" confidence="High" note="Real-time data from US National Library of Medicine clinical trial registry" />
     </h3>
     <div className="bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-2xl p-6">
@@ -675,7 +588,7 @@ interface ResearchPaperData {
 const ResearchPaperList = ({ data, setActiveSidebar }: { data: ResearchPaperData[], setActiveSidebar?: any }) => (
   <div className="mb-10 animate-in fade-in duration-500">
     <h3 className="text-xl font-medium text-zinc-100 mb-6 flex items-center gap-2">
-      <BookOpen className="w-5 h-5 text-indigo-400" /> Literature & Evidence
+      <BookOpen className="w-5 h-5 text-cyan-400" /> Literature & Evidence
       <SourceBadge api="PubMed / NCBI E-utilities" endpoint="/entrez/eutils/esearch.fcgi?db=pubmed&term={molecule}" url="https://pubmed.ncbi.nlm.nih.gov" confidence="High" note="PubMed citations retrieved via NCBI E-utilities API" />
     </h3>
     {data && data.length > 0 ? (
@@ -684,7 +597,7 @@ const ResearchPaperList = ({ data, setActiveSidebar }: { data: ResearchPaperData
           <div key={idx} className="bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-2xl p-6 hover:border-zinc-700 transition-colors break-inside-avoid cursor-pointer"
             onClick={() => setActiveSidebar && setActiveSidebar('refs')}>
             <div className="flex justify-between items-start mb-4">
-              <span className="text-xs font-medium text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded border border-indigo-500/20">{paper.source}</span>
+              <span className="text-xs font-medium text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded border border-cyan-500/20">{paper.source}</span>
               <span className="text-xs text-zinc-500 font-mono">{paper.year}</span>
             </div>
             <h4 className="text-base font-medium text-zinc-200 mb-3 leading-snug">{paper.title}</h4>
@@ -798,7 +711,7 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
         <div className="col-span-1 lg:col-span-8 bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-6 relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-emerald-500/5 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 via-transparent to-emerald-500/5 pointer-events-none" />
 
           {/* Header Section */}
           <div className="relative z-10 mb-6">
@@ -806,7 +719,7 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
               <div>
                 <h1 className="text-3xl lg:text-4xl font-bold text-zinc-100 mb-2 tracking-tight">{report.molecule}</h1>
                 <p className="text-zinc-400 text-sm uppercase tracking-wider font-medium flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
                   Compound Overview
                 </p>
               </div>
@@ -822,31 +735,15 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 relative z-10">
             {/* Left Column - Key Metrics */}
             <div className="space-y-4">
-              {/* Market & Scores Row */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-zinc-950/60 border border-zinc-800/60 rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
-                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Market Size</p>
-                  </div>
-                  <p className="text-xl font-bold text-zinc-100">
-                    {totalMarket > 0 ? `₹${(totalMarket * 83.5).toFixed(1)}B` : <span className="text-zinc-600 text-sm">N/A</span>}
-                  </p>
+              {/* Market Size Only */}
+              <div className="bg-zinc-950/60 border border-zinc-800/60 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Market Size</p>
                 </div>
-
-                <div className="bg-zinc-950/60 border border-zinc-800/60 rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <TrendingUp className="w-3.5 h-3.5 text-indigo-400" />
-                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Phoenix Score</p>
-                  </div>
-                  {phoenixScore != null ? (
-                    <p className="text-xl font-bold text-zinc-100">
-                      {phoenixScore.toFixed(1)}<span className="text-sm text-zinc-600 font-normal">/10</span>
-                    </p>
-                  ) : (
-                    <p className="text-sm text-zinc-600">Computing…</p>
-                  )}
-                </div>
+                <p className="text-xl font-bold text-zinc-100">
+                  {totalMarket > 0 ? `₹${(totalMarket * 83.5).toFixed(1)}B` : <span className="text-zinc-600 text-sm">N/A</span>}
+                </p>
               </div>
 
               {/* Compound Properties */}
@@ -885,16 +782,16 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
 
               {/* Top Opportunity */}
               {((report.repurposing_candidates || []).length > 0) && (
-                <div className="bg-gradient-to-br from-indigo-950/40 to-indigo-900/20 border border-indigo-800/40 rounded-lg p-4">
+                <div className="bg-gradient-to-br from-cyan-950/40 to-cyan-900/20 border border-cyan-800/40 rounded-lg p-4">
                   <div className="flex items-center gap-2 mb-3">
-                    <Target className="w-3.5 h-3.5 text-indigo-400" />
-                    <p className="text-[10px] text-indigo-400 uppercase tracking-wider font-semibold">Top Opportunity</p>
+                    <Target className="w-3.5 h-3.5 text-cyan-400" />
+                    <p className="text-[10px] text-cyan-400 uppercase tracking-wider font-semibold">Top Opportunity</p>
                   </div>
                   <p className="text-base font-semibold text-zinc-100 mb-2">
                     {(report.repurposing_candidates || [])[0].condition}
                   </p>
                   <div className="flex items-center gap-2">
-                    <span className="text-indigo-300 bg-indigo-500/20 px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide border border-indigo-500/30">
+                    <span className="text-cyan-300 bg-cyan-500/20 px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide border border-cyan-500/30">
                       {(report.repurposing_candidates || [])[0].max_phase}
                     </span>
                     {((report.repurposing_candidates || [])[0].market_size_usd_billion || 0) > 0 && (
@@ -941,15 +838,17 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
                     className={clsx("h-6 px-2.5 text-xs gap-1", structureMode === '2d' ? "bg-zinc-800 text-zinc-100" : "")} onClick={() => setStructureMode('2d')}>
                     <Atom size={11} /> 2D
                   </Button>
-                  <Button size="sm" variant={structureMode === '3d' ? 'secondary' : 'ghost'}
-                    className={clsx("h-6 px-2.5 text-xs gap-1", structureMode === '3d' ? "bg-zinc-800 text-zinc-100" : "")} onClick={() => setStructureMode('3d')}>
-                    <Box size={11} /> 3D
-                  </Button>
+                  {report.pubchem_data?.cid && (
+                    <Button size="sm" variant={structureMode === '3d' ? 'secondary' : 'ghost'}
+                      className={clsx("h-6 px-2.5 text-xs gap-1", structureMode === '3d' ? "bg-zinc-800 text-zinc-100" : "")} onClick={() => setStructureMode('3d')}>
+                      <Box size={11} /> 3D
+                    </Button>
+                  )}
                 </div>
               </div>
 
               <div className="flex-1 bg-black border border-[#27272a] rounded-xl flex items-center justify-center relative shadow-inner overflow-hidden">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(99,102,241,0.08)_0%,transparent_70%)]"></div>
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(6,182,212,0.08)_0%,transparent_70%)]"></div>
                 <div className="w-full h-full relative z-10 flex items-center justify-center p-8">
                   <AnimatePresence mode="wait">
                     {structureMode === '2d' ? (
@@ -997,14 +896,14 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
 
                 {/* Drug Classes or Formula */}
                 {(report.pubchem_data?.drug_classes && report.pubchem_data.drug_classes.length > 0) ? (
-                  <div className="bg-gradient-to-br from-purple-950/30 to-purple-900/10 border border-purple-800/30 rounded-lg p-3">
+                  <div className="bg-gradient-to-br from-cyan-950/30 to-cyan-900/10 border border-cyan-800/30 rounded-lg p-3">
                     <div className="flex items-center gap-2 mb-2">
-                      <Pill className="w-3 h-3 text-purple-400" />
-                      <p className="text-[10px] text-purple-400 uppercase tracking-wider font-semibold">Drug Classes</p>
+                      <Pill className="w-3 h-3 text-cyan-400" />
+                      <p className="text-[10px] text-cyan-400 uppercase tracking-wider font-semibold">Drug Classes</p>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {report.pubchem_data.drug_classes.slice(0, 3).map((drugClass: string, idx: number) => (
-                        <span key={idx} className="text-[10px] px-2 py-0.5 bg-purple-500/10 text-purple-300 border border-purple-500/20 rounded">
+                        <span key={idx} className="text-[10px] px-2 py-0.5 bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 rounded">
                           {drugClass}
                         </span>
                       ))}
@@ -1041,21 +940,21 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
 
         <div className="col-span-1 lg:col-span-4 flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-3 flex-none">
-            <GaugeScore title="Viability Score" score={viabilityScore} max={10} subtitle="" />
-            <GaugeScore title="Phoenix Score" score={phoenixScore} max={10} subtitle="Data pipeline" />
+            <GaugeScore title="Viability Score" score={viabilityScore} max={10} />
+            <GaugeScore title="Phoenix Score" score={phoenixScore} max={10} />
           </div>
           <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-6 flex-1">
             <h3 className="text-zinc-200 text-sm font-semibold mb-3">Quick Synthesis</h3>
             <p className="text-sm text-zinc-400 mb-2 leading-relaxed">
               {displayReasoning}
               <span onClick={() => setActiveSidebar('refs')}
-                className="inline-flex items-center justify-center ml-1 px-1.5 h-4 text-[9px] font-bold bg-indigo-500/20 text-indigo-400 rounded cursor-pointer hover:bg-indigo-500/40 transition-colors">
+                className="inline-flex items-center justify-center ml-1 px-1.5 h-4 text-[9px] font-bold bg-cyan-500/20 text-cyan-400 rounded cursor-pointer hover:bg-cyan-500/40 transition-colors">
                 1, 2
               </span>
             </p>
             {isLong && (
               <button onClick={() => setSynthExpanded(e => !e)}
-                className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors mb-3 flex items-center gap-1">
+                className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors mb-3 flex items-center gap-1">
                 {synthExpanded ? 'Show less' : 'Read full synthesis'}
                 <ChevronDown size={12} className={clsx('transition-transform', synthExpanded && 'rotate-180')} />
               </button>
@@ -1087,13 +986,6 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
         opportunities: report?.ai_analysis?.top_opportunities || [],
         risks: report?.ai_analysis?.top_risks || []
       }} />
-      {report.phoenix_breakdown && Object.keys(report.phoenix_breakdown).length > 0 && (
-        <PhoenixBreakdownPanel
-          breakdown={report.phoenix_breakdown}
-          explanation={report.phoenix_explanation || ''}
-          score={phoenixScore}
-        />
-      )}
     </div>
   );
 };
@@ -1137,7 +1029,7 @@ const ClinicalAndIPTab = ({ report }: any) => (
     }))} />
     <div className="mt-12 bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-2xl p-8 lg:p-12 mb-10 text-left">
       <h3 className="text-xl font-medium text-zinc-100 flex items-center gap-2 mb-6">
-        <FileText className="w-5 h-5 text-indigo-400" /> Patents & Source Literature
+        <FileText className="w-5 h-5 text-cyan-400" /> Patents & Source Literature
       </h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div>
@@ -1146,7 +1038,7 @@ const ClinicalAndIPTab = ({ report }: any) => (
             {(report.patent_data || []).length > 0 ? (report.patent_data || []).map((p: any) => (
               <a key={p.id} href={p.url || '#'} target="_blank" rel="noreferrer"
                 className="block p-4 border border-zinc-800/80 rounded-xl hover:border-zinc-600 bg-zinc-950 transition-all text-left">
-                <div className="text-indigo-400 text-xs mb-1 font-mono">{p.id}</div>
+                <div className="text-cyan-400 text-xs mb-1 font-mono">{p.id}</div>
                 <div className="text-zinc-200 text-sm">{p.title}</div>
               </a>
             )) : (
@@ -1198,7 +1090,7 @@ const ScienceTab = ({ report, setActiveSidebar }: any) => {
         alerts: report.regulatory_data?.warnings ? [report.regulatory_data.warnings] : ['No specific boxed warnings recorded']
       }} />
       <h3 className="text-xl font-medium text-zinc-100 mb-6 flex items-center gap-2 mt-10">
-        <Atom className="w-5 h-5 text-indigo-400" /> Physicochemical Descriptors
+        <Atom className="w-5 h-5 text-cyan-400" /> Physicochemical Descriptors
         <SourceBadge api="PubChem" endpoint="/compound/name/{mol}/property/MolecularWeight,XLogP,HBondDonorCount,HBondAcceptorCount,Complexity,DefinedAtomStereoCount/JSON" url="https://pubchem.ncbi.nlm.nih.gov" confidence="High" note="Computed properties from PubChem REST PUG API" />
       </h3>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
@@ -1243,7 +1135,7 @@ const ScienceTab = ({ report, setActiveSidebar }: any) => {
 const MarketTab = ({ report, currency, formatMarketSize }: any) => (
   <div className="animate-in fade-in duration-500 w-full mx-auto">
     <h3 className="text-xl font-medium text-zinc-100 mb-6 flex items-center gap-2">
-      <LineChart className="w-5 h-5 text-indigo-400" /> Commercial Opportunities
+      <LineChart className="w-5 h-5 text-cyan-400" /> Commercial Opportunities
       <SourceBadge api="LLM Market Estimate" endpoint="api.groq.com/openai/v1/chat/completions" confidence="Estimated" note="Market size estimates generated from published therapeutic area reports. Not investment advice." />
     </h3>
     <MarketOpportunityList data={(report.market_analysis || []).map((item: any) => ({
@@ -1253,7 +1145,7 @@ const MarketTab = ({ report, currency, formatMarketSize }: any) => (
     }))} />
     <div className="flex items-center justify-between mb-6 mt-10">
       <h3 className="text-xl font-medium text-zinc-100 flex items-center gap-2">
-        <BarChart3 className="w-5 h-5 text-indigo-400" /> Market Penetration
+        <BarChart3 className="w-5 h-5 text-cyan-400" /> Market Penetration
       </h3>
     </div>
     <div className="bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-2xl p-8 space-y-8">
@@ -1277,7 +1169,7 @@ const MarketTab = ({ report, currency, formatMarketSize }: any) => (
                   </div>
                 </div>
                 <div className="w-full bg-zinc-950 rounded-full h-2 overflow-hidden border border-zinc-800/80">
-                  <motion.div className="h-full rounded-full bg-gradient-to-r from-indigo-600 to-indigo-400"
+                  <motion.div className="h-full rounded-full bg-gradient-to-r from-cyan-600 to-cyan-400"
                     initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 1, delay: i * 0.1, ease: 'easeOut' }} />
                 </div>
               </div>
@@ -1417,25 +1309,15 @@ export default function ReportPage() {
   };
 
   const handleExportPdf = async () => {
-    if (!report || !id) return;
+    if (!report) return;
     setIsExportingPdf(true);
     try {
-      const res = await fetch(`/api/reports/${id}/pdf`);
-      if (!res.ok) throw new Error('PDF Generation failed');
-      
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      a.download = `${report.molecule || 'report'}-analysis.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      await exportResearchPaper(report, (msg) => {
+        console.log('[PDF Export]', msg);
+      });
     } catch (err) {
-      console.error(err);
-      alert('Failed to generate PDF. Check the backend logs.');
+      console.error('[PDF Export Error]', err);
+      alert('Failed to generate PDF. See console for details.');
     } finally {
       setIsExportingPdf(false);
     }
@@ -1477,7 +1359,7 @@ export default function ReportPage() {
 
   if (loading) return (
     <div className="min-h-screen bg-[#000000] text-zinc-300 flex flex-col items-center justify-center gap-3">
-      <Loader2 size={28} className="animate-spin text-indigo-400" />
+      <Loader2 size={28} className="animate-spin text-cyan-400" />
       <p className="text-sm text-zinc-500">Loading report...</p>
     </div>
   );
@@ -1586,10 +1468,22 @@ export default function ReportPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={() => setActiveSidebar(activeSidebar === 'ai' ? null : 'ai')}
-                className={clsx("flex items-center gap-2 px-3.5 py-2 rounded-lg transition-colors border text-sm font-medium",
-                  activeSidebar === 'ai' ? "bg-indigo-500 text-white border-indigo-600" : "bg-[#161b22] hover:bg-[#1c2128] border-zinc-800 text-zinc-300")}>
-                <Bot className="w-4 h-4" /><span>Ask AI</span>
+              <button onClick={() => navigate("/community")} className="flex items-center gap-2 px-3.5 py-2 hover:bg-white/20 text-white rounded-full transition-colors border border-zinc-700 text-sm font-medium"><Users className="w-5 h-5 flex items-center justify-center -ml-0.5" /><span>Community</span></button>
+                <button 
+                onClick={() => setActiveSidebar(activeSidebar === 'ai' ? null : 'ai')}
+                className={clsx(
+                  "flex items-center gap-2 h-9 px-4 rounded-full transition-all duration-200 text-sm font-medium",
+                  activeSidebar === 'ai' 
+                    ? "bg-white text-black ring-2 ring-white/20" 
+                    : "bg-white/10 hover:bg-white/20 text-white active:scale-95"
+                )}
+              >
+                <div className="w-5 h-5 flex items-center justify-center -ml-0.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 -960 960 960" fill="currentColor">
+                    <path d="M480-80q0-83-31.5-156T363-363q-54-54-127-85.5T80-480q83 0 156-31.5T363-597q54-54 85.5-127T480-880q0 83 31.5 156T597-597q54 54 127 85.5T880-480q-83 0-156 31.5T597-363q-54 54-85.5 127T480-80Z" />
+                  </svg>
+                </div>
+                <span>Ask</span>
               </button>
               <button onClick={handleExportPdf} disabled={isExportingPdf}
                 className="flex items-center gap-2 px-3.5 py-2 bg-zinc-100 hover:bg-white text-zinc-900 rounded-lg transition-colors disabled:opacity-50 border-none text-sm font-medium">
@@ -1602,13 +1496,13 @@ export default function ReportPage() {
           {/* Tab navigation */}
           <div className="w-full flex justify-center mb-8 relative z-50 px-6 shrink-0">
             {/* Desktop tabs */}
-            <div className="hidden md:flex items-center border-b border-zinc-800/60 gap-1 w-full max-w-3xl">
+            <div className="hidden md:flex items-center gap-1 w-full max-w-3xl bg-black/30 backdrop-blur-xl border border-zinc-800/60 rounded-2xl p-1.5 shadow-lg shadow-black/10">
               {navItems.map((item) => (
                 <button key={item.id} onClick={() => setActiveTab(item.id)}
-                  className={`px-5 py-2.5 text-sm font-medium transition-all whitespace-nowrap relative ${
+                  className={`flex-1 px-5 py-2.5 text-sm font-medium transition-all whitespace-nowrap rounded-xl ${
                     activeTab === item.id
-                      ? 'text-zinc-100 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-indigo-500 after:rounded-t'
-                      : 'text-zinc-500 hover:text-zinc-300'
+                      ? 'bg-gradient-to-br from-cyan-500/20 to-blue-500/20 text-zinc-100 shadow-lg shadow-cyan-500/10 border border-cyan-500/30'
+                      : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
                   }`}>
                   {item.label}
                 </button>
@@ -1617,15 +1511,15 @@ export default function ReportPage() {
             {/* Mobile dropdown */}
             <div className="md:hidden w-full relative">
               <button onClick={() => setMobileTabOpen(o => !o)}
-                className="w-full flex items-center justify-between bg-black/40 backdrop-blur-md border border-zinc-800/50 px-4 py-3 rounded-xl text-sm font-medium text-zinc-100">
+                className="w-full flex items-center justify-between bg-black/30 backdrop-blur-xl border border-zinc-800/60 px-4 py-3 rounded-2xl text-sm font-medium text-zinc-100 shadow-lg shadow-black/10">
                 {activeNavLabel}
                 <ChevronDown size={16} className={clsx('transition-transform text-zinc-500', mobileTabOpen && 'rotate-180')} />
               </button>
               {mobileTabOpen && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-xl overflow-hidden z-50 shadow-2xl">
+                <div className="absolute top-full left-0 right-0 mt-2 bg-black/30 backdrop-blur-xl border border-zinc-800/60 rounded-2xl overflow-hidden z-50 shadow-2xl">
                   {navItems.map((item) => (
                     <button key={item.id} onClick={() => { setActiveTab(item.id); setMobileTabOpen(false); }}
-                      className={`w-full text-left px-4 py-3 text-sm transition-colors ${activeTab === item.id ? 'bg-[#27272a] text-zinc-100' : 'text-zinc-500 hover:bg-[#18181b] hover:text-zinc-300'}`}>
+                      className={`w-full text-left px-4 py-3 text-sm transition-colors ${activeTab === item.id ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-zinc-100 border-l-2 border-cyan-500' : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'}`}>
                       {item.label}
                     </button>
                   ))}
@@ -1635,34 +1529,33 @@ export default function ReportPage() {
           </div>
 
           <main className="flex-1 w-full px-6 lg:px-12 pb-20 relative z-10 mx-auto max-w-[1600px]">
-            {activeTab === 'overview'    && <OverviewTab report={report} onStartSimulation={() => setShowSimulation(true)} structureMode={structureMode} setStructureMode={setStructureMode} setActiveSidebar={setActiveSidebar} />}
-            {activeTab === 'science'     && <ScienceTab report={report} setActiveSidebar={setActiveSidebar} />}
-            {activeTab === 'market'      && <MarketTab report={report} currency={currency} formatMarketSize={formatMarketSize} />}
-            {activeTab === 'twin'        && (
-              <div className="animate-in fade-in duration-500 w-full mx-auto">
-                <StructuralAnalysisList data={(report.similar_molecules || []).map((sm: any) => ({
-                  moleculeName: sm.name,
-                  similarityScore: Number(sm.similarity_score) || 0.95,
-                  mechanismMatch: sm.mechanism_match || 'High',
-                  repurposingPotential: sm.repurposing_potential || 'Exploratory',
-                  confidence: Number(sm.confidence) || 0.88
-                }))} />
-                <div className="flex items-center justify-between mb-6 mt-10">
-                  <h2 className="text-xl font-medium text-zinc-100 flex items-center gap-2">
-                    <Fingerprint className="w-5 h-5 text-indigo-400" /> Molecular Twin Engine
-                  </h2>
-                </div>
-                {report?.pubchem_data?.cid ? (
-                  <RepurposingAlternativeFinder initialCid={report.pubchem_data.cid} hideSearch={true} />
-                ) : (
-                  <div className="bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-2xl p-12 text-center text-zinc-500 flex flex-col items-center">
-                    <Fingerprint className="w-10 h-10 mb-4 opacity-50 text-indigo-400" />
-                    <p className="italic text-sm">No valid CID found to generate twin models for this compound.</p>
-                  </div>
-                )}
+            <div className={activeTab === 'overview' ? '' : 'hidden'}>
+              <OverviewTab report={report} onStartSimulation={() => setShowSimulation(true)} structureMode={structureMode} setStructureMode={setStructureMode} setActiveSidebar={setActiveSidebar} />
+            </div>
+            <div className={activeTab === 'science' ? '' : 'hidden'}>
+              <ScienceTab report={report} setActiveSidebar={setActiveSidebar} />
+            </div>
+            <div className={activeTab === 'market' ? '' : 'hidden'}>
+              <MarketTab report={report} currency={currency} formatMarketSize={formatMarketSize} />
+            </div>
+            <div className={activeTab === 'twin' ? 'animate-in fade-in duration-500 w-full mx-auto' : 'hidden'}>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-medium text-zinc-100 flex items-center gap-2">
+                  <Fingerprint className="w-5 h-5 text-cyan-400" /> Molecular Twin Engine
+                </h2>
               </div>
-            )}
-            {activeTab === 'synthesis' && <AISynthesisTab report={report} />}
+              {report?.pubchem_data?.cid ? (
+                <RepurposingAlternativeFinder initialCid={report.pubchem_data.cid} hideSearch={true} />
+              ) : (
+                <div className="bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-2xl p-12 text-center text-zinc-500 flex flex-col items-center">
+                  <Fingerprint className="w-10 h-10 mb-4 opacity-50 text-cyan-400" />
+                  <p className="italic text-sm">No valid CID found to generate twin models for this compound.</p>
+                </div>
+              )}
+            </div>
+            <div className={activeTab === 'synthesis' ? '' : 'hidden'}>
+              <AISynthesisTab report={report} setActiveSidebar={setActiveSidebar} />
+            </div>
           </main>
         </div>
 
@@ -1672,8 +1565,8 @@ export default function ReportPage() {
           activeSidebar !== null ? "translate-x-0" : "translate-x-full"
         )} style={{ width: sidebarWidth }}>
           <div onMouseDown={startResizing}
-            className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-indigo-500/50 transition-colors z-50 group">
-            <div className="absolute top-1/2 -translate-y-1/2 left-0.5 h-8 w-0.5 bg-zinc-700 group-hover:bg-indigo-400 rounded-full" />
+            className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-cyan-500/50 transition-colors z-50 group">
+            <div className="absolute top-1/2 -translate-y-1/2 left-0.5 h-8 w-0.5 bg-zinc-700 group-hover:bg-cyan-400 rounded-full" />
           </div>
 
           {activeSidebar === 'ai' && (
@@ -1741,7 +1634,7 @@ export default function ReportPage() {
                 <form className="flex gap-2 relative" onSubmit={(e) => handleRagSubmit(e)}>
                   <Input value={ragInput} onChange={(e: any) => setRagInput(e.target.value)}
                     placeholder="Ask a question..." disabled={ragLoading}
-                    className="flex-1 bg-zinc-900/80 border border-zinc-800/60 text-zinc-100 placeholder:text-zinc-500 px-4 py-6 pr-12 focus-visible:ring-1 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-0 rounded-xl outline-none" />
+                    className="flex-1 bg-zinc-900/80 border border-zinc-800/60 text-zinc-100 placeholder:text-zinc-500 px-4 py-6 pr-12 focus-visible:ring-1 focus-visible:ring-cyan-500/50 focus-visible:ring-offset-0 rounded-xl outline-none" />
                   <Button type="submit" size="icon" disabled={ragLoading || !ragInput.trim()}
                     className="absolute right-2 top-1/2 -translate-y-1/2 bg-zinc-800 hover:bg-zinc-700 text-white disabled:bg-transparent disabled:text-zinc-600 rounded-full h-8 w-8 flex items-center justify-center border-none">
                     <Send size={14} />
@@ -1752,7 +1645,7 @@ export default function ReportPage() {
                     AI can make mistakes. <a href="#" className="underline hover:text-zinc-300">Learn more</a>
                   </p>
                   <p className="text-xs text-zinc-500 flex items-center gap-1">
-                    <Sparkles size={10} className="inline text-indigo-400" /> Gemini
+                    <Sparkles size={10} className="inline text-cyan-400" /> Gemini
                   </p>
                 </div>
               </div>

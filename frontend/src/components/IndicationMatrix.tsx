@@ -79,9 +79,9 @@ export default function IndicationMatrix({ clinicalData }: { clinicalData: any[]
           />
           <ZAxis type="number" dataKey="z" range={[100, 1000]} name="Volume" />
           <Tooltip content={<CustomTooltip />} cursor={{ strokeDasharray: '3 3' }} />
-          <Scatter name="Indications" data={data} fill="#6366f1" fillOpacity={0.6}>
+          <Scatter name="Indications" data={data} fill="#06b6d4" fillOpacity={0.6}>
             {data.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={entry.maxPhase >= 3 ? '#10b981' : '#6366f1'} />
+              <Cell key={`cell-${index}`} fill={entry.maxPhase >= 3 ? '#10b981' : '#06b6d4'} />
             ))}
           </Scatter>
         </ScatterChart>

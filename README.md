@@ -5,6 +5,7 @@ Blueprints is an advanced full-stack platform engineered to automate drug repurp
 ## 🚀 Key Features
 
 - **Automated AI Analysis Pipeline**: Powered by LangGraph and LLaMA-series models over the Groq API for rapid intelligence synthesis and report generation.
+- **Workflow Animation Pipeline**: [Live Architecture & Data Flow Visualization](https://invisible-project.vercel.app/)
 - **Biochemical & Pharmacological Models**: Direct integrations with PubChem PUG REST API for fetching live physicochemical descriptors (Heavy Atom Counts, Stereocenters, Complexities), toxicity schemas (LD50), and ADME data.
 - **Repurposing Intelligence**: Generates condition viability scores and parses active/terminated clinical trials targeting the queried compounds to surface next-generation market opportunities.
 - **Real-Time Interactive AI Skeptic/Chatbot**: Server-Sent Events (SSE) chatbot tailored dynamically to the investigated drug contexts to query specific facts directly against the active analytical report.

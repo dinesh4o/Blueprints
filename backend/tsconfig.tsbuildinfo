@@ -1,0 +1,1 @@
+{"root":["./backup_community.tsx","./env.ts","./server.ts","./src/config/database.ts","./src/config/passport.ts","./src/lib/pdfgenerator.ts","./src/lib/agents/workflow.ts","./src/models/job.ts","./src/models/thread.ts","./src/models/user.ts","./src/routes/auth.ts","./src/routes/community.ts"],"errors":true,"version":"5.8.3"}

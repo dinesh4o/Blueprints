@@ -1,8 +1,13 @@
+import './env';
 // Load environment variables first
 import * as dotenv from 'dotenv';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
-dotenv.config({ path: path.resolve(__dirname, '../../.env') }); // Root .env or specific fallback
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.resolve(__dirname, '../.env') }); // Root .env or specific fallback
 dotenv.config(); // fallback to local just in case
 
 import express from 'express';
@@ -15,6 +20,7 @@ import { connectDB } from './src/config/database';
 import passportConfig from './src/config/passport';
 import authRoutes from './src/routes/auth';
 import communityRoutes from './src/routes/community';
+import { Job } from './src/models/Job';
 
 import { generateReportLaTeX } from './src/lib/pdfGenerator';
 
@@ -360,14 +366,33 @@ async function startServer() {
     }
   });
 
-  app.post('/api/analyze', (req, res) => {
+  app.post('/api/analyze', async (req, res) => {
     const { molecule } = req.body;
     if (!molecule) {
       return res.status(400).json({ error: 'Molecule name is required' });
     }
 
-    const jobId = crypto.randomUUID();
+    // Very early validation before creating jobs
+    const isReal = await validateMolecule(molecule);
+    if (!isReal) {
+      return res.status(400).json({ error: 'No real-world data found for this molecule. Please try a valid pharmacological term.' });
+    }
+
+    let jobId = crypto.randomUUID();
     
+    // Save to DB so we have a persistent history record
+    try {
+      const newJob = await Job.create({
+        molecule,
+        userId: req.user ? (req.user as any)._id : undefined,
+        status: 'processing',
+        currentStep: 'Initializing...',
+      });
+      jobId = newJob._id.toString();
+    } catch (err) {
+      console.error('Failed to create Job in MongoDB:', err);
+    }
+
     jobs.set(jobId, {
       id: jobId,
       molecule,
@@ -406,8 +431,33 @@ async function startServer() {
     res.json(job);
   });
 
-  app.get('/api/reports/:id', (req, res) => {
-    const report = reports.get(req.params.id);
+  app.get('/api/history', async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      const userId = (req.user as any)._id;
+      const history = await Job.find({ userId, status: 'completed' })
+                               .select('_id molecule status createdAt reportData')
+                               .sort({ createdAt: -1 });
+      res.json(history);
+    } catch (err) {
+      console.error('History fetch error:', err);
+      res.status(500).json({ error: 'Failed to fetch history' });
+    }
+  });
+
+  app.get('/api/reports/:id', async (req, res) => {
+    let report = reports.get(req.params.id);
+    if (!report) {
+      try {
+        const job = await Job.findById(req.params.id);
+        if (job && job.reportData) {
+          report = job.reportData;
+          reports.set(req.params.id, report);
+        }
+      } catch (err) {}
+    }
     if (!report) {
       return res.status(404).json({ error: 'Report not found' });
     }
@@ -416,7 +466,14 @@ async function startServer() {
 
   app.get('/api/reports/:id/pdf', async (req, res) => {
     try {
-      const report = reports.get(req.params.id);
+      let report = reports.get(req.params.id);
+      if (!report) {
+        const job = await Job.findById(req.params.id);
+        if (job && job.reportData) {
+          report = job.reportData;
+          reports.set(req.params.id, report);
+        }
+      }
       if (!report) {
         return res.status(404).json({ error: 'Report not found' });
       }
@@ -602,6 +659,8 @@ async function startServer() {
              created_at: new Date().toISOString(),
            };
            reports.set(jobId, report);
+        Job.findByIdAndUpdate(jobId, { status: 'completed', reportData: report, progress: 100, currentStep: 'Complete' }, { new: true }).catch(err => console.error('Failed to update DB', err));
+        Job.findByIdAndUpdate(jobId, { status: 'completed', reportData: report, progress: 100, currentStep: 'Complete' }, { new: true }).catch(err => console.error('Failed to update DB', err));
            job.status = 'complete'; jobs.set(jobId, job);
          }
          return;
@@ -718,6 +777,8 @@ async function startServer() {
         };
 
         reports.set(jobId, report);
+        Job.findByIdAndUpdate(jobId, { status: 'completed', reportData: report, progress: 100, currentStep: 'Complete' }, { new: true }).catch(err => console.error('Failed to update DB', err));
+        Job.findByIdAndUpdate(jobId, { status: 'completed', reportData: report, progress: 100, currentStep: 'Complete' }, { new: true }).catch(err => console.error('Failed to update DB', err));
         
         job.status = 'complete';
         jobs.set(jobId, job);
@@ -773,6 +834,8 @@ async function startServer() {
       };
 
       reports.set(jobId, report);
+        Job.findByIdAndUpdate(jobId, { status: 'completed', reportData: report, progress: 100, currentStep: 'Complete' }, { new: true }).catch(err => console.error('Failed to update DB', err));
+        Job.findByIdAndUpdate(jobId, { status: 'completed', reportData: report, progress: 100, currentStep: 'Complete' }, { new: true }).catch(err => console.error('Failed to update DB', err));
       
       job.steps[6].status = 'done';
       job.steps[6].log = 'Claims generated.';
@@ -802,3 +865,5 @@ async function startServer() {
 }
 
 startServer();
+
+

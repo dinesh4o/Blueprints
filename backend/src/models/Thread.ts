@@ -27,6 +27,7 @@ export interface IThread extends Document {
   imageUrl?: string;
   tags: string[];
   upvotes: number;
+  upvotedBy: string[];
   comments: IComment[];
   createdAt: Date;
   updatedAt: Date;
@@ -41,6 +42,7 @@ const threadSchema = new Schema<IThread>(
     imageUrl: { type: String },
     tags: [{ type: String }],
     upvotes: { type: Number, default: 0 },
+    upvotedBy: [{ type: String }],
     comments: [commentSchema],
   },
   { timestamps: true }

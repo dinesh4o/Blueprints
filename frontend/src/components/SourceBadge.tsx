@@ -45,7 +45,7 @@ export function SourceBadge({ api, endpoint, url, confidence = 'High', note }: S
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); setOpen(o => !o); }}
-        className="w-4 h-4 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-500 hover:text-zinc-300 hover:border-zinc-500 transition-all flex items-center justify-center text-[9px] font-bold leading-none focus:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500"
+        className="w-4 h-4 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-500 hover:text-zinc-300 hover:border-zinc-500 transition-all flex items-center justify-center text-[9px] font-bold leading-none focus:outline-none focus-visible:ring-1 focus-visible:ring-cyan-500"
         aria-label={`Data source: ${api}`}
         title={`Source: ${api}`}
       >
@@ -91,7 +91,7 @@ export function SourceBadge({ api, endpoint, url, confidence = 'High', note }: S
               target="_blank"
               rel="noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="mt-3 flex items-center gap-1.5 text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors border-t border-[#27272a] pt-2"
+              className="mt-3 flex items-center gap-1.5 text-[10px] text-cyan-400 hover:text-cyan-300 transition-colors border-t border-[#27272a] pt-2"
             >
               <ExternalLink size={10} /> View source directly
             </a>

@@ -12,6 +12,7 @@ const ProgressPage = lazy(() => import('./pages/ProgressPage'));
 const ReportPage = lazy(() => import('./pages/ReportPage'));
 const PortfolioPage = lazy(() => import('./pages/PortfolioPage'));
 const RepurposingPage = lazy(() => import('./pages/RepurposingPage'));
+const CommunityPage = lazy(() => import('./pages/CommunityPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
 const SignupPage = lazy(() => import('./pages/SignupPage').then(m => ({ default: m.SignupPage })));
 const ProfilePage = lazy(() => import('./pages/ProfilePage').then(m => ({ default: m.ProfilePage })));
@@ -91,6 +92,14 @@ export default function App() {
                     element={
                       <ProtectedRoute>
                         <ProfilePage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/community"
+                    element={
+                      <ProtectedRoute>
+                        <CommunityPage />
                       </ProtectedRoute>
                     }
                   />

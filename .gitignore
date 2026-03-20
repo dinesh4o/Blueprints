@@ -11,3 +11,12 @@ __pycache__/
 *.pyc
 kill-ports.md
 ref.txt
+
+# Temporary files
+*.patch
+*.cjs
+*.txt
+*.ps1
+temp_*
+backup_*
+

@@ -1,19 +1,16 @@
 import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Camera, Save, Lock, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Camera, Lock, Eye, EyeOff, CheckCircle2, Shield, Activity, Database, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
 
 export function ProfilePage() {
   const navigate = useNavigate();
   const { user, updateProfile, updatePassword } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const glassStyle =
-    'bg-background/40 backdrop-blur-xl border border-white/20 shadow-[0_8px_32px_0_rgba(31,38,135,0.37)]';
 
   // Profile form state
   const [name, setName] = useState(user?.name || '');
@@ -60,7 +57,6 @@ export function ProfilePage() {
       setProfileError('');
     };
     reader.readAsDataURL(file);
-    // Reset file input so same file can be re-selected
     e.target.value = '';
   }, []);
 
@@ -103,7 +99,7 @@ export function ProfilePage() {
 
     setPasswordLoading(true);
     try {
-      await updatePassword(hasPassword ? currentPassword : undefined, newPassword);
+      await updatePassword(currentPassword, newPassword);
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
@@ -116,269 +112,249 @@ export function ProfilePage() {
     }
   };
 
-  const initials = (user?.name || user?.email || 'U').charAt(0).toUpperCase();
-
   return (
-    <main className="bg-[#f8fafc] dark:bg-[#000000] text-zinc-900 dark:text-[#ededed] font-sans selection:bg-zinc-200 dark:selection:bg-zinc-800 relative overflow-x-hidden min-h-screen flex flex-col items-center p-6">
+    <main className="min-h-screen bg-black text-zinc-200 font-sans selection:bg-zinc-800 relative overflow-hidden">
       
-      {/* Fixed background grid */}
-      <div className="fixed inset-0 bg-[linear-gradient(rgba(0,0,0,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.025)_1px,transparent_1px)] dark:bg-[linear-gradient(rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.025)_1px,transparent_1px)] bg-[size:64px_64px] pointer-events-none [mask-image:radial-gradient(ellipse_90%_70%_at_50%_30%,#000_10%,transparent_100%)] z-0" />
-
-      {/* Back button */}
-      <div className="w-full max-w-2xl mb-6 relative z-10">
-        <Button
-          variant="ghost"
-          onClick={() => navigate(-1)}
-          className="gap-2 text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back
-        </Button>
+      {/* Liquid Glass Background Accents */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-50">
+        <div className="absolute top-[-10%] left-[-10%] w-[40rem] h-[40rem] bg-indigo-900/10 rounded-full blur-[140px] mix-blend-screen" />
+        <div className="absolute bottom-[20%] right-[-10%] w-[30rem] h-[30rem] bg-zinc-600/10 rounded-full blur-[120px] mix-blend-screen" />
       </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="w-full max-w-2xl space-y-6"
-      >
-        {/* Page title */}
-        <div className="space-y-1">
-          <h1 className="text-3xl font-extrabold tracking-tight text-foreground">Edit Profile</h1>
-          <p className="text-muted-foreground text-sm">Update your account details and preferences</p>
+      {/* Header */}
+      <header className="sticky top-0 z-50 px-6 py-4 flex items-center gap-4 bg-black/80 backdrop-blur-xl border-b border-zinc-900">
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          onClick={() => navigate(-1)}
+          className="rounded-full hover:bg-zinc-900 text-zinc-400 hover:text-white"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </Button>
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-white">Account Settings</h1>
         </div>
+      </header>
 
-        {/* Profile card */}
-        <div className={`rounded-2xl p-8 ${glassStyle}`}>
-          <h2 className="text-base font-semibold text-foreground mb-6">Profile Information</h2>
-
-          {profileError && (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mb-4 bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded-xl text-sm"
-            >
-              {profileError}
-            </motion.div>
-          )}
-          {profileSuccess && (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mb-4 bg-green-500/10 border border-green-500/30 text-green-500 px-4 py-3 rounded-xl text-sm flex items-center gap-2"
-            >
-              <CheckCircle2 className="h-4 w-4" />
-              Profile updated successfully
-            </motion.div>
-          )}
-
-          <form onSubmit={handleProfileSave} className="space-y-6">
-            {/* Avatar */}
-            <div className="flex items-center gap-6">
-              <div className="relative group cursor-pointer" onClick={handleAvatarClick}>
-                <div className="h-24 w-24 rounded-full overflow-hidden ring-2 ring-primary/20 ring-offset-2 ring-offset-background">
+      <div className="w-full max-w-5xl mx-auto p-4 sm:p-8 flex flex-col lg:flex-row gap-8 relative z-10">
+        
+        {/* Left column: Overview & Stats */}
+        <div className="w-full lg:w-1/3 flex flex-col gap-6">
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="p-6 rounded-2xl bg-[#0a0a0a] border border-zinc-800/80 shadow-2xl relative overflow-hidden"
+          >
+            {/* Ambient inner glow */}
+            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+            
+            <div className="flex flex-col items-center text-center">
+              <div className="relative group cursor-pointer mb-5" onClick={handleAvatarClick}>
+                <div className="w-28 h-28 rounded-full bg-zinc-900 border-2 border-zinc-800 overflow-hidden relative">
                   {avatarPreview ? (
-                    <img src={avatarPreview} alt="Profile" className="h-full w-full object-cover" />
+                    <img src={avatarPreview} alt="Avatar shadow" className="w-full h-full object-cover" />
                   ) : (
-                    <div className="h-full w-full bg-primary/20 flex items-center justify-center text-primary font-bold text-3xl">
-                      {initials}
+                    <div className="w-full h-full flex flex-col items-center justify-center text-zinc-600">
+                      <Camera className="w-8 h-8 mb-1" />
                     </div>
                   )}
+                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-opacity">
+                    <Camera className="w-6 h-6 text-white mb-1" />
+                    <span className="text-[10px] font-bold text-white tracking-widest uppercase">Change</span>
+                  </div>
                 </div>
-                {/* Hover overlay */}
-                <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                  <Camera className="h-6 w-6 text-white" />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <button
-                  type="button"
-                  onClick={handleAvatarClick}
-                  className="text-sm text-primary font-medium hover:underline"
-                >
-                  Upload new photo
-                </button>
-                <p className="text-xs text-muted-foreground">JPG, PNG, GIF up to 2MB</p>
-                {user?.authProvider === 'google' && (
-                  <p className="text-xs text-muted-foreground">Signed in with Google</p>
+                {user?.authProvider !== 'local' && (
+                  <div className="absolute bottom-0 right-0 w-8 h-8 bg-zinc-900 rounded-full border border-zinc-800 flex items-center justify-center">
+                    <Shield className="w-4 h-4 text-emerald-400" />
+                  </div>
                 )}
               </div>
-
               <input
-                ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                ref={fileInputRef}
                 onChange={handleFileChange}
+                accept="image/png, image/jpeg, image/gif, image/webp"
                 className="hidden"
               />
+              <h2 className="text-xl font-bold text-white mb-1">{user?.name || 'Researcher'}</h2>
+              <p className="text-sm text-zinc-500">{(user as any)?.role || 'Verified User'}</p>
             </div>
-
-            {/* Name */}
-            <div className="space-y-1.5">
-              <Label htmlFor="name" className="text-foreground/80 text-sm font-medium">Full Name</Label>
-              <Input
-                id="name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Your full name"
-                className="bg-background/50 border-border/50 focus:border-primary h-11"
-              />
+            
+            <div className="mt-8 space-y-4">
+              <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-900/50 border border-zinc-800/50">
+                <div className="flex items-center gap-3">
+                  <Activity className="w-4 h-4 text-zinc-400" />
+                  <span className="text-sm text-zinc-300">Analysis Runs</span>
+                </div>
+                <span className="font-semibold text-white">42</span>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-900/50 border border-zinc-800/50">
+                <div className="flex items-center gap-3">
+                  <Database className="w-4 h-4 text-zinc-400" />
+                  <span className="text-sm text-zinc-300">Saved Queries</span>
+                </div>
+                <span className="font-semibold text-white">12</span>
+              </div>
             </div>
-
-            {/* Email */}
-            <div className="space-y-1.5">
-              <Label htmlFor="email" className="text-foreground/80 text-sm font-medium">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="your@email.com"
-                required
-                className="bg-background/50 border-border/50 focus:border-primary h-11"
-              />
-            </div>
-
-            <Button
-              type="submit"
-              disabled={profileLoading}
-              className="gap-2 rounded-full shadow-[0_0_20px_-8px_rgba(102,16,242,0.6)] hover:scale-[1.02] transition-transform"
-            >
-              <Save className="h-4 w-4" />
-              {profileLoading ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </form>
+          </motion.div>
         </div>
 
-        {/* Password card */}
-        <div className={`rounded-2xl p-8 ${glassStyle}`}>
-          <div className="flex items-center gap-2 mb-1">
-            <Lock className="h-4 w-4 text-primary" />
-            <h2 className="text-base font-semibold text-foreground">
-              {hasPassword ? 'Change Password' : 'Create Password'}
-            </h2>
-          </div>
-          <p className="text-xs text-muted-foreground mb-6">
-            {hasPassword
-              ? 'Update your existing password'
-              : 'Add a password so you can also sign in with email'}
-          </p>
+        {/* Right column: Forms */}
+        <div className="w-full lg:w-2/3 flex flex-col gap-6">
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="p-6 sm:p-8 rounded-2xl bg-[#0a0a0a] border border-zinc-800/80 shadow-2xl relative"
+          >
+            <div className="mb-6">
+              <h3 className="text-lg font-bold text-white">Personal Information</h3>
+              <p className="text-sm text-zinc-500">Update your profile identity and contact details.</p>
+            </div>
 
-          {passwordError && (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mb-4 bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded-xl text-sm"
-            >
-              {passwordError}
-            </motion.div>
-          )}
-          {passwordSuccess && (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mb-4 bg-green-500/10 border border-green-500/30 text-green-500 px-4 py-3 rounded-xl text-sm flex items-center gap-2"
-            >
-              <CheckCircle2 className="h-4 w-4" />
-              Password updated successfully
-            </motion.div>
-          )}
-
-          <form onSubmit={handlePasswordSave} className="space-y-4">
-            {/* Current password — only if user already has one */}
-            {hasPassword && (
-              <div className="space-y-1.5">
-                <Label htmlFor="currentPassword" className="text-foreground/80 text-sm font-medium">
-                  Current Password
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="currentPassword"
-                    type={showCurrent ? 'text' : 'password'}
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    placeholder="••••••••"
-                    required
-                    className="bg-background/50 border-border/50 focus:border-primary h-11 pr-11"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowCurrent(!showCurrent)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    {showCurrent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
+            {profileError && (
+              <div className="bg-rose-500/10 border border-rose-500/20 text-rose-500 px-4 py-3 rounded-lg text-sm mb-6 flex items-center gap-2">
+                 <span>{profileError}</span>
+              </div>
+            )}
+            
+            {profileSuccess && (
+              <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-3 rounded-lg text-sm mb-6 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Profile updated successfully</span>
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="newPassword" className="text-foreground/80 text-sm font-medium">
-                  New Password
-                </Label>
-                <div className="relative">
+            <form onSubmit={handleProfileSave} className="space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div className="space-y-1.5">
+                  <Label htmlFor="name" className="text-zinc-400 text-xs font-semibold uppercase tracking-wider">Full Name</Label>
                   <Input
-                    id="newPassword"
-                    type={showNew ? 'text' : 'password'}
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="••••••••"
-                    required
-                    className="bg-background/50 border-border/50 focus:border-primary h-11 pr-11"
+                    id="name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Enter your name"
+                    className="bg-zinc-950 border-zinc-800/80 focus:border-white focus:ring-1 focus:ring-white/20 h-11 text-sm rounded-lg"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowNew(!showNew)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    {showNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="email" className="text-zinc-400 text-xs font-semibold uppercase tracking-wider">Email Address</Label>
+                  <Input
+                    id="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="name@company.com"
+                    disabled={user?.authProvider !== 'local'}
+                    className="bg-zinc-950 border-zinc-800/80 focus:border-white focus:ring-1 focus:ring-white/20 h-11 text-sm rounded-lg disabled:opacity-50"
+                  />
+                  {user?.authProvider !== 'local' && (
+                    <p className="text-xs text-zinc-600 mt-1 flex items-center gap-1">
+                      <Lock className="w-3 h-3" /> Managed by {user?.authProvider}
+                    </p>
+                  )}
                 </div>
               </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="confirmPassword" className="text-foreground/80 text-sm font-medium">
-                  Confirm
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="confirmPassword"
-                    type={showConfirm ? 'text' : 'password'}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="••••••••"
-                    required
-                    className="bg-background/50 border-border/50 focus:border-primary h-11 pr-11"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirm(!showConfirm)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
+              <div className="flex justify-end pt-2">
+                <Button 
+                  type="submit" 
+                  disabled={profileLoading || (name === user?.name && email === user?.email && !avatarData)}
+                  className="bg-white text-black hover:bg-zinc-200 h-10 px-6 font-semibold rounded-lg"
+                >
+                  {profileLoading ? 'Saving...' : 'Save Changes'}
+                </Button>
               </div>
-            </div>
+            </form>
+          </motion.div>
 
-            <Button
-              type="submit"
-              disabled={passwordLoading}
-              className="gap-2 rounded-full shadow-[0_0_20px_-8px_rgba(102,16,242,0.6)] hover:scale-[1.02] transition-transform"
+          {hasPassword && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="p-6 sm:p-8 rounded-2xl bg-[#0a0a0a] border border-zinc-800/80 shadow-2xl relative"
             >
-              <Lock className="h-4 w-4" />
-              {passwordLoading
-                ? 'Updating...'
-                : hasPassword
-                ? 'Update Password'
-                : 'Create Password'}
-            </Button>
-          </form>
+              <div className="mb-6">
+                <h3 className="text-lg font-bold text-white">Security</h3>
+                <p className="text-sm text-zinc-500">Update your password to keep your account secure.</p>
+              </div>
+
+              {passwordError && (
+                <div className="bg-rose-500/10 border border-rose-500/20 text-rose-500 px-4 py-3 rounded-lg text-sm mb-6">
+                  {passwordError}
+                </div>
+              )}
+              {passwordSuccess && (
+                <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-3 rounded-lg text-sm mb-6 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Password updated successfully</span>
+                </div>
+              )}
+
+              <form onSubmit={handlePasswordSave} className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label className="text-zinc-400 text-xs font-semibold uppercase tracking-wider">Current Password</Label>
+                  <div className="relative">
+                    <Input
+                      type={showCurrent ? "text" : "password"}
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      required
+                      className="bg-zinc-950 border-zinc-800/80 focus:border-white focus:ring-1 focus:ring-white/20 h-11 text-sm rounded-lg pr-10"
+                    />
+                    <button type="button" onClick={() => setShowCurrent(!showCurrent)} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300">
+                      {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-zinc-400 text-xs font-semibold uppercase tracking-wider">New Password</Label>
+                    <div className="relative">
+                      <Input
+                        type={showNew ? "text" : "password"}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        required
+                        className="bg-zinc-950 border-zinc-800/80 focus:border-white focus:ring-1 focus:ring-white/20 h-11 text-sm rounded-lg pr-10"
+                      />
+                      <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300">
+                        {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-zinc-400 text-xs font-semibold uppercase tracking-wider">Confirm New Password</Label>
+                    <div className="relative">
+                      <Input
+                        type={showConfirm ? "text" : "password"}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        required
+                        className="bg-zinc-950 border-zinc-800/80 focus:border-white focus:ring-1 focus:ring-white/20 h-11 text-sm rounded-lg pr-10"
+                      />
+                      <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300">
+                        {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-4">
+                  <Button 
+                    type="submit" 
+                    disabled={passwordLoading || !currentPassword || !newPassword || !confirmPassword}
+                    className="bg-white text-black hover:bg-zinc-200 h-10 px-6 font-semibold rounded-lg"
+                  >
+                    {passwordLoading ? 'Updating...' : 'Update Password'}
+                  </Button>
+                </div>
+              </form>
+            </motion.div>
+          )}
+
         </div>
-      </motion.div>
+      </div>
     </main>
   );
 }

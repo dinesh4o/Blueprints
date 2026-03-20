@@ -10,12 +10,12 @@
  *   C) Pathway Overlap Panel (SVG node-edge graph: Drug → Target → Disease)
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronDown, ChevronRight, ExternalLink, Activity, TrendingUp,
   ShieldAlert, Target, BookOpen, Gavel, CheckCircle, Circle,
-  Network, Zap, Database
+  Network, Zap, Database, X
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -62,7 +62,6 @@ function PathwayOverlapPanel({ report }: { report: any }) {
   // Extract targets/pathways from mechanism_of_action text
   const mechText: string = pd.mechanism_of_action || pd.pharmacology || '';
   const rawTargets: string[] = [];
-  // Quick heuristic: pick capitalized biological terms (kinase, receptor, etc.)
   const bioTermPattern = /([A-Z][A-Za-z0-9-]{2,20}(?:\s+(?:kinase|receptor|pathway|inhibitor|activator|transporter|channel|protein|enzyme|complex))?)/g;
   let m: RegExpExecArray | null;
   while ((m = bioTermPattern.exec(mechText)) !== null && rawTargets.length < 5) {
@@ -71,13 +70,13 @@ function PathwayOverlapPanel({ report }: { report: any }) {
       rawTargets.push(term);
     }
   }
-  const targets = rawTargets.length > 0 ? rawTargets.slice(0, 4) : ['Primary Target'];
+  const targets = rawTargets.length > 0 ? rawTargets.slice(0, 5) : ['Primary Target'];
 
   // Diseases from top candidates
-  const diseases = (report.repurposing_candidates || []).slice(0, 5).map((c: any) => c.condition);
+  const diseases = (report.repurposing_candidates || []).slice(0, 6).map((c: any) => c.condition);
 
-  // Compute positions
-  const CX = 320, CY = 200, R_TARGET = 120, R_DISEASE = 230;
+  // Layout — canvas: 1150 x 825
+  const CX = 575, CY = 412, R_TARGET = 200, R_DISEASE = 395;
   const targetAngle = (i: number) => ((2 * Math.PI) / targets.length) * i - Math.PI / 2;
   const diseaseAngle = (i: number) => ((2 * Math.PI) / Math.max(diseases.length, 1)) * i - Math.PI / 2;
 
@@ -106,77 +105,139 @@ function PathwayOverlapPanel({ report }: { report: any }) {
   const nodeByid = Object.fromEntries(nodes.map(n => [n.id, n]));
 
   return (
-    <div className="bg-[#121214] border border-[#27272a] rounded-2xl p-6 overflow-hidden">
-      <h3 className="text-base font-medium text-zinc-100 mb-4 flex items-center gap-2">
-        <Network className="w-4 h-4 text-indigo-400" />
+    <div className="bg-[#0c0c10] border border-[#27272a] rounded-2xl p-6 overflow-hidden">
+      <h3 className="text-base font-medium text-zinc-100 mb-5 flex items-center gap-2">
+        <Network className="w-4 h-4 text-cyan-400" />
         Pathway Overlap
-        <span className="text-xs text-zinc-500 font-normal ml-1">Drug → Target → Disease</span>
       </h3>
-      <div className="w-full overflow-x-auto">
-        <svg viewBox="0 0 640 400" className="w-full max-w-2xl mx-auto" style={{ minWidth: 320 }}>
+      <div className="w-full overflow-x-auto pb-4">
+        <div className="max-w-[72rem] mx-auto">
+          <svg viewBox="0 0 1150 825" className="w-full h-auto">
           <defs>
-            <radialGradient id="drug-glow" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="#6366f1" stopOpacity="0.4" />
-              <stop offset="100%" stopColor="#6366f1" stopOpacity="0" />
+            {/* Arrowhead marker for drug→target edges */}
+            <marker id="arrow-cyan" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <path d="M0,0 L0,6 L8,3 z" fill="#06b6d4" />
+            </marker>
+            {/* Arrowhead marker for target→disease edges */}
+            <marker id="arrow-slate" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <path d="M0,0 L0,6 L8,3 z" fill="#475569" />
+            </marker>
+            {/* Glow filters */}
+            <filter id="glow-drug" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="6" result="blur" />
+              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
+            <filter id="glow-target" x="-40%" y="-40%" width="180%" height="180%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
+            <radialGradient id="drug-grad" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#818cf8" />
+              <stop offset="100%" stopColor="#4f46e5" />
+            </radialGradient>
+            <radialGradient id="drug-halo" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.35" />
+              <stop offset="100%" stopColor="#06b6d4" stopOpacity="0" />
             </radialGradient>
           </defs>
 
-          {/* Edges */}
+          {/* ── Edges ── */}
           {edges.map((edge, i) => {
             const a = nodeByid[edge.from];
             const b = nodeByid[edge.to];
             if (!a || !b) return null;
             const isTargetEdge = edge.from === 'drug';
+
+            // Shorten line slightly so arrowhead lands before the circle edge
+            const dx = b.x - a.x, dy = b.y - a.y;
+            const len = Math.sqrt(dx * dx + dy * dy);
+            const shrink = isTargetEdge ? 24 : 16;   // target radius + margin
+            const ex = b.x - (dx / len) * shrink;
+            const ey = b.y - (dy / len) * shrink;
+
             return (
               <line
-                key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                stroke={isTargetEdge ? '#6366f1' : '#27272a'}
-                strokeWidth={isTargetEdge ? 1.5 : 1}
-                strokeDasharray={isTargetEdge ? '' : '4 3'}
-                strokeOpacity={0.6}
+                key={i}
+                x1={a.x} y1={a.y} x2={ex} y2={ey}
+                stroke={isTargetEdge ? '#06b6d4' : '#475569'}
+                strokeWidth={isTargetEdge ? 2.5 : 1.8}
+                strokeDasharray={isTargetEdge ? '' : '6 4'}
+                strokeOpacity={isTargetEdge ? 0.85 : 0.7}
+                markerEnd={isTargetEdge ? 'url(#arrow-cyan)' : 'url(#arrow-slate)'}
               />
             );
           })}
 
-          {/* Nodes */}
+          {/* ── Nodes ── */}
           {nodes.map(node => {
             if (node.type === 'drug') return (
-              <g key={node.id}>
-                <circle cx={node.x} cy={node.y} r={35} fill="url(#drug-glow)" />
-                <circle cx={node.x} cy={node.y} r={28} fill="#1e1e2e" stroke="#6366f1" strokeWidth={2} />
-                <text x={node.x} y={node.y - 3} textAnchor="middle" fontSize={9} fill="#a5b4fc" fontWeight="bold">DRUG</text>
-                <text x={node.x} y={node.y + 10} textAnchor="middle" fontSize={8} fill="#e2e8f0" fontWeight="600"
-                  style={{ maxWidth: 60 }}>
+              <g key={node.id} filter="url(#glow-drug)">
+                {/* Outer halo */}
+                <circle cx={node.x} cy={node.y} r={56} fill="url(#drug-halo)" />
+                {/* Main circle */}
+                <circle cx={node.x} cy={node.y} r={42} fill="#083344" stroke="#06b6d4" strokeWidth={2.5} />
+                {/* Inner gradient fill */}
+                <circle cx={node.x} cy={node.y} r={38} fill="url(#drug-grad)" fillOpacity={0.15} />
+                <text x={node.x} y={node.y - 8} textAnchor="middle" fontSize={9} fill="#a5b4fc" fontWeight="bold" letterSpacing="0.5">DRUG</text>
+                <text x={node.x} y={node.y + 8} textAnchor="middle" fontSize={10} fill="#e2e8f0" fontWeight="700">
                   {node.label.slice(0, 12)}{node.label.length > 12 ? '…' : ''}
                 </text>
               </g>
             );
             if (node.type === 'target') return (
-              <g key={node.id}>
-                <circle cx={node.x} cy={node.y} r={18} fill="#1a1a28" stroke="#4f46e5" strokeWidth={1.5} />
-                <Zap x={node.x - 6} y={node.y - 6} width={12} height={12} color="#818cf8" />
-                <text x={node.x} y={node.y + 26} textAnchor="middle" fontSize={7} fill="#94a3b8">
-                  {node.label.slice(0, 18)}{node.label.length > 18 ? '…' : ''}
+              <g key={node.id} filter="url(#glow-target)">
+                <circle cx={node.x} cy={node.y} r={26} fill="#1a1a2e" stroke="#4f46e5" strokeWidth={2} />
+                <circle cx={node.x} cy={node.y} r={22} fill="#312e81" fillOpacity={0.25} />
+                <text x={node.x} y={node.y + 38} textAnchor="middle" fontSize={8} fill="#e2e8f0" fontWeight="600" stroke="#0c0c10" strokeWidth="3" paintOrder="stroke">
+                  {node.label.slice(0, 16)}{node.label.length > 16 ? '…' : ''}
+                </text>
+                <text x={node.x} y={node.y + 38} textAnchor="middle" fontSize={8} fill="#94a3b8" fontWeight="600">
+                  {node.label.slice(0, 16)}{node.label.length > 16 ? '…' : ''}
                 </text>
               </g>
             );
-            // disease
+            // disease node
+            const line1 = node.label.slice(0, 12);
+            const line2 = node.label.length > 12 ? node.label.slice(12, 24) + (node.label.length > 24 ? '…' : '') : '';
             return (
               <g key={node.id}>
-                <circle cx={node.x} cy={node.y} r={14} fill="#0f1923" stroke="#374151" strokeWidth={1} />
-                <text x={node.x} y={node.y + 3} textAnchor="middle" fontSize={6.5} fill="#9ca3af">
-                  {node.label.slice(0, 14)}{node.label.length > 14 ? '…' : ''}
+                <circle cx={node.x} cy={node.y} r={20} fill="#0f172a" stroke="#334155" strokeWidth={1.5} />
+                {/* Background for text readability */}
+                <rect x={node.x - 30} y={node.y - 8} width={60} height={line2 ? 20 : 12} fill="#0c0c10" fillOpacity="0.8" rx="2" />
+                <text x={node.x} y={node.y} textAnchor="middle" fontSize={7} fill="#e2e8f0" fontWeight="500">
+                  {line1}
                 </text>
+                {line2 && (
+                  <text x={node.x} y={node.y + 9} textAnchor="middle" fontSize={6.5} fill="#94a3b8" fontWeight="400">
+                    {line2}
+                  </text>
+                )}
               </g>
             );
           })}
         </svg>
+        </div>
       </div>
-      <div className="flex items-center gap-6 mt-4 text-xs text-zinc-500">
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block" /> Drug</span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-indigo-400/40 border border-indigo-500 inline-block" /> Target/Pathway</span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-zinc-700 border border-zinc-600 inline-block" /> Disease</span>
+
+      {/* Legend */}
+      <div className="flex justify-center items-center gap-6 mt-3 text-xs text-zinc-500">
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 inline-block" /> Drug
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full border border-cyan-500 bg-cyan-900/40 inline-block" /> Target / Pathway
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-zinc-800 border border-slate-600 inline-block" /> Disease
+        </span>
+        <span className="flex items-center gap-2 ml-auto">
+          <span className="inline-block w-6 border-t-2 border-cyan-500" /> Direct link
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="inline-block w-6 border-t border-dashed border-slate-500" /> Indirect link
+        </span>
       </div>
+
       {mechText && (
         <p className="text-xs text-zinc-600 mt-3 leading-relaxed border-t border-zinc-800/50 pt-3">
           <span className="text-zinc-500 font-medium">Mechanism source: </span>PubChem pharmacology data
@@ -190,8 +251,8 @@ function PathwayOverlapPanel({ report }: { report: any }) {
 // Evidence Chain Accordion Row
 // ─────────────────────────────────────────────
 
-function EvidenceChain({ opportunity, report }: { opportunity: any; report: any }) {
-  const [open, setOpen] = useState(false);
+function EvidenceChainDetail({ opportunity, report, setActiveSidebar }: { opportunity: any; report: any; setActiveSidebar?: any }) {
+  if (!opportunity) return null;
 
   // Filter trials supporting this condition
   const supportingTrials = (report.clinical_data || [])
@@ -200,7 +261,7 @@ function EvidenceChain({ opportunity, report }: { opportunity: any; report: any 
       const opp = (opportunity.condition || '').toLowerCase();
       return c.includes(opp.split(' ').slice(-2).join(' ')) || opp.includes(c.split(' ').slice(-2).join(' '));
     })
-    .slice(0, 4);
+    .slice(0, 5);
 
   // Filter publications (keyword match against condition)
   const condWords = opportunity.condition.toLowerCase().split(' ').filter((w: string) => w.length > 4);
@@ -209,7 +270,7 @@ function EvidenceChain({ opportunity, report }: { opportunity: any; report: any 
       const title = (l.title || '').toLowerCase();
       return condWords.some((w: string) => title.includes(w));
     })
-    .slice(0, 3);
+    .slice(0, 4);
 
   // Patent status
   const patentCount = (report.patent_data || []).length;
@@ -221,154 +282,186 @@ function EvidenceChain({ opportunity, report }: { opportunity: any; report: any 
   const mechanism = report.pubchem_data?.mechanism_of_action;
 
   return (
-    <div className="border border-[#27272a] rounded-xl overflow-hidden">
-      {/* Header row */}
-      <button
-        className="w-full flex items-center gap-4 p-4 bg-[#121214] hover:bg-[#18181b] transition-colors text-left"
-        onClick={() => setOpen(!open)}
-      >
-        <div className={clsx('w-2 h-2 rounded-full shrink-0', scoreColor(opportunity.composite_score).text.replace('text-', 'bg-'))} />
-        <div className="flex-1 min-w-0">
-          <span className="text-sm font-medium text-zinc-100">{opportunity.condition}</span>
+    <>
+      <div className="bg-[#121214] border border-[#27272a] rounded-xl overflow-hidden h-full flex flex-col">
+        {/* Header */}
+      <div className="px-6 py-5 bg-[#09090b] border-b border-[#27272a] flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className={clsx('w-2.5 h-2.5 rounded-full shrink-0', scoreColor(opportunity.composite_score).text.replace('text-', 'bg-'))} />
+          <div>
+            <h4 className="text-lg font-medium text-zinc-100">{opportunity.condition}</h4>
+            <p className="text-[11px] text-zinc-500 mt-0.5">Evidence synthesis & gap analysis</p>
+          </div>
         </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <Badge className={clsx('text-[10px] border font-mono', scoreColor(opportunity.composite_score).bg, scoreColor(opportunity.composite_score).text, scoreColor(opportunity.composite_score).border)}>
-            {opportunity.composite_score.toFixed(1)}/10
+        <div className="flex flex-col items-end">
+          <Badge className={clsx('text-xs px-2.5 py-0.5 border font-mono', scoreColor(opportunity.composite_score).bg, scoreColor(opportunity.composite_score).text, scoreColor(opportunity.composite_score).border)}>
+            Score {opportunity.composite_score.toFixed(1)}/10
           </Badge>
-          {open ? <ChevronDown className="w-4 h-4 text-zinc-500" /> : <ChevronRight className="w-4 h-4 text-zinc-500" />}
         </div>
-      </button>
+      </div>
 
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
-          >
-            <div className="p-5 bg-[#09090b] space-y-5 border-t border-[#27272a]">
-
-              {/* Clinical Trials */}
-              <div>
-                <h5 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <Activity className="w-3.5 h-3.5 text-indigo-400" /> Clinical Trial Evidence
-                </h5>
-                {supportingTrials.length > 0 ? (
-                  <div className="space-y-2">
-                    {supportingTrials.map((t: any, i: number) => (
-                      <a
-                        key={i}
-                        href={t.nct_id ? `https://clinicaltrials.gov/study/${t.nct_id}` : '#'}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-start gap-3 p-3 bg-[#121214] border border-[#27272a] rounded-lg hover:border-zinc-600 transition-colors group"
-                      >
-                        <CheckCircle className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {t.nct_id && <span className="text-[10px] font-mono text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded">{t.nct_id}</span>}
-                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{t.phase || 'Not determined'}</span>
-                            <span className={clsx('text-[10px] px-1.5 py-0.5 rounded font-medium',
-                              t.status === 'COMPLETED' ? 'text-emerald-400 bg-emerald-500/10' :
-                              t.status === 'RECRUITING' ? 'text-blue-400 bg-blue-500/10' :
-                              t.status === 'TERMINATED' ? 'text-rose-400 bg-rose-500/10' :
-                              'text-zinc-400 bg-zinc-800/50'
-                            )}>{t.status || 'UNKNOWN'}</span>
-                          </div>
-                          <p className="text-xs text-zinc-400 mt-1 truncate">{t.title || t.condition || 'Trial record'}</p>
+      <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-8">
+        
+        {/* Row 1: Trials & Publications */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+          
+          {/* Clinical Trials */}
+          <div>
+            <h5 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-2 mb-4">
+              <Activity className="w-4 h-4 text-cyan-400" /> Clinical Data Traceability
+            </h5>
+            {supportingTrials.length > 0 ? (
+              <div className="space-y-3">
+                {supportingTrials.map((t: any, i: number) => {
+                  const trialHref = t.nct_id ? `https://clinicaltrials.gov/study/${t.nct_id}` : null;
+                  const CardComponent = trialHref ? 'a' : 'div';
+                  return (
+                    <CardComponent
+                      key={i}
+                      {...(trialHref ? { href: trialHref, target: '_blank', rel: 'noreferrer' } : {})}
+                      className={clsx(
+                        "flex flex-col p-4 bg-[#09090b] border border-[#27272a] rounded-lg transition-colors group",
+                        trialHref ? "hover:border-zinc-500 hover:bg-[#121214]" : ""
+                      )}
+                    >
+                      <div className="flex items-start justify-between min-w-0 mb-2 gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {t.nct_id && <span className="text-[10px] font-mono text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded">{t.nct_id}</span>}
+                          <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{t.phase || 'Not determined'}</span>
                         </div>
-                        <ExternalLink className="w-3.5 h-3.5 text-zinc-600 group-hover:text-zinc-400 transition-colors shrink-0 mt-0.5" />
-                      </a>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-zinc-600 italic">No directly matched trials — evidence may be indirect via mechanism overlap.</p>
-                )}
+                        <span className={clsx('text-[10px] px-1.5 py-0.5 rounded font-medium whitespace-nowrap',
+                          t.status === 'COMPLETED' ? 'text-emerald-400 bg-emerald-500/10' :
+                          t.status === 'RECRUITING' ? 'text-blue-400 bg-blue-500/10' :
+                          t.status === 'TERMINATED' ? 'text-rose-400 bg-rose-500/10' :
+                          'text-zinc-400 bg-zinc-800/50'
+                        )}>{t.status || 'UNKNOWN'}</span>
+                      </div>
+                      <p className="text-sm text-zinc-300 leading-snug line-clamp-2" title={t.title || t.condition || 'Trial record'}>{t.title || t.condition || 'Trial record'}</p>
+                    </CardComponent>
+                  );
+                })}
               </div>
+            ) : (
+              <div className="p-4 bg-[#09090b] border border-[#27272a] border-dashed rounded-lg text-center h-full flex flex-col items-center justify-center min-h-[120px]">
+                <Activity className="w-5 h-5 text-zinc-600 mb-2" />
+                <p className="text-xs text-zinc-500">No direct trial matches.</p>
+              </div>
+            )}
+          </div>
 
-              {/* Publications */}
-              <div>
-                <h5 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <BookOpen className="w-3.5 h-3.5 text-indigo-400" /> Publication Evidence
-                </h5>
-                {supportingPapers.length > 0 ? (
-                  <div className="space-y-2">
-                    {supportingPapers.map((p: any, i: number) => (
-                      <a
-                        key={i}
-                        href={p.id ? `https://pubmed.ncbi.nlm.nih.gov/${p.id}` : (p.doi ? `https://doi.org/${p.doi}` : '#')}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-start gap-3 p-3 bg-[#121214] border border-[#27272a] rounded-lg hover:border-zinc-600 transition-colors group"
-                      >
-                        <BookOpen className="w-3.5 h-3.5 text-blue-400 mt-0.5 shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {p.id && <span className="text-[10px] font-mono text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">PMID: {p.id}</span>}
-                            {p.doi && <span className="text-[10px] font-mono text-zinc-500">DOI: {p.doi}</span>}
-                            <span className="text-[10px] text-zinc-600">{p.journal} · {p.year}</span>
-                          </div>
-                          <p className="text-xs text-zinc-400 mt-1 leading-snug">{p.title}</p>
+          {/* Publications */}
+          <div>
+            <h5 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-2 mb-4">
+              <BookOpen className="w-4 h-4 text-cyan-400" /> Key Literature Mentions
+            </h5>
+            {supportingPapers.length > 0 ? (
+              <div className="space-y-3">
+                {supportingPapers.map((p: any, i: number) => {
+                  const pubHref = p.id ? `https://pubmed.ncbi.nlm.nih.gov/${p.id}` : (p.doi ? `https://doi.org/${p.doi}` : null);
+                  const CardComponent = pubHref ? 'a' : 'div';
+                  return (
+                    <CardComponent
+                      key={i}
+                      {...(pubHref ? { href: pubHref, target: '_blank', rel: 'noreferrer' } : {})}
+                      className={clsx(
+                        "flex items-start gap-4 p-4 bg-[#09090b] border border-[#27272a] rounded-lg transition-colors group",
+                        pubHref ? "hover:border-zinc-500 hover:bg-[#121214]" : ""
+                      )}
+                    >
+                      <div className="shrink-0 mt-0.5">
+                        <BookOpen className="w-4 h-4 text-zinc-600 group-hover:text-blue-400 transition-colors" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-zinc-300 leading-snug mb-2 line-clamp-2" title={p.title}>{p.title}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {p.id && <span className="text-[10px] font-mono text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded">PMID: {p.id}</span>}
+                          {p.doi && !p.id && <span className="text-[10px] font-mono text-zinc-500">DOI: {p.doi}</span>}
+                          {p.year && <span className="text-[10px] text-zinc-500">• {p.year}</span>}
                         </div>
-                        <ExternalLink className="w-3.5 h-3.5 text-zinc-600 group-hover:text-zinc-400 transition-colors shrink-0 mt-0.5" />
-                      </a>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-zinc-600 italic">No directly title-matched publications. Check References panel for broader literature.</p>
-                )}
+                      </div>
+                    </CardComponent>
+                  );
+                })}
               </div>
-
-              {/* Molecular target */}
-              <div>
-                <h5 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <Target className="w-3.5 h-3.5 text-indigo-400" /> Molecular Target Link
-                </h5>
-                <div className="p-3 bg-[#121214] border border-[#27272a] rounded-lg">
-                  <p className="text-xs text-zinc-400 leading-relaxed">
-                    {mechanism
-                      ? mechanism.slice(0, 300) + (mechanism.length > 300 ? '…' : '')
-                      : 'Molecular mechanism not available for this compound in PubChem.'}
-                  </p>
-                  <p className="text-[10px] text-zinc-600 mt-2 flex items-center gap-1">
-                    <Database className="w-3 h-3" /> Source: PubChem Pharmacology · Mechanism of Action
-                  </p>
-                </div>
+            ) : (
+              <div className="p-4 bg-[#09090b] border border-[#27272a] border-dashed rounded-lg text-center h-full flex flex-col items-center justify-center min-h-[120px]">
+                <BookOpen className="w-5 h-5 text-zinc-600 mb-2" />
+                <p className="text-xs text-zinc-500">No contextual publications found.</p>
               </div>
+            )}
+          </div>
+          
+        </div>
 
-              {/* Patent status */}
-              <div>
-                <h5 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <Gavel className="w-3.5 h-3.5 text-indigo-400" /> Patent Landscape
-                </h5>
-                <div className="p-3 bg-[#121214] border border-[#27272a] rounded-lg">
-                  <p className={clsx('text-xs font-medium', patentCount === 0 ? 'text-emerald-400' : patentCount <= 3 ? 'text-amber-400' : 'text-rose-400')}>
-                    {patentStatus}
-                  </p>
-                  {patentCount > 0 && (
-                    <ul className="mt-2 space-y-1">
-                      {(report.patent_data || []).slice(0, 3).map((pat: any, i: number) => (
-                        <li key={i} className="text-[10px] text-zinc-600 flex items-center gap-1.5">
-                          <span className="text-zinc-700">·</span>
-                          <span className="font-mono text-indigo-500">{pat.id}</span>
-                          <span className="truncate">{pat.title?.slice(0, 60)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <p className="text-[10px] text-zinc-600 mt-2 flex items-center gap-1">
-                    <Database className="w-3 h-3" /> Source: USPTO PatentsView API
-                  </p>
-                </div>
+        <div className="border-t border-[#27272a] my-2"></div>
+
+        {/* Row 2: IP & Mechanism */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+          
+          {/* Target & Mechanism */}
+          <div>
+            <h5 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-2 mb-4">
+              <Target className="w-4 h-4 text-cyan-400" /> Molecular Target Trace
+            </h5>
+            <div className="p-5 bg-gradient-to-br from-[#09090b] to-[#121214] border border-[#27272a] rounded-lg max-h-[220px] min-h-[140px] flex flex-col">
+              <p className="text-sm text-zinc-300 leading-relaxed overflow-y-auto custom-scrollbar flex-1 pr-2">
+                {mechanism || 'Mechanism details not available for this compound in the target database.'}
+              </p>
+              <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 border-t border-[#27272a] pt-3 mt-3">
+                <Database className="w-3 h-3" /> Source: PubChem Pharmacology
               </div>
-
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+
+          {/* Patents */}
+          <div>
+            <h5 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-2 mb-4">
+              <Gavel className="w-4 h-4 text-cyan-400" /> Patent Claims
+            </h5>
+            <div className="p-5 bg-[#09090b] border border-[#27272a] rounded-lg max-h-[220px] min-h-[140px] flex flex-col">
+              <div className="flex items-center gap-2 mb-4">
+                <div className={clsx('w-2 h-2 rounded-full', patentCount === 0 ? 'bg-emerald-500' : patentCount <= 3 ? 'bg-amber-500' : 'bg-rose-500')} />
+                <p className={clsx('text-xs font-semibold uppercase tracking-wider', patentCount === 0 ? 'text-emerald-400' : patentCount <= 3 ? 'text-amber-400' : 'text-rose-400')}>
+                  {patentStatus}
+                </p>
+              </div>
+              {patentCount > 0 ? (
+                <div className="space-y-2 overflow-y-auto custom-scrollbar flex-1 pr-2">
+                  {(report.patent_data || []).map((pat: any, i: number) => (
+                    <button 
+                      key={i} 
+                      onClick={() => {
+                        if (setActiveSidebar) {
+                          setActiveSidebar('refs');
+                          setTimeout(() => {
+                            document.dispatchEvent(new CustomEvent('highlight-ref', { detail: `PATENT-${i + 1}` }));
+                          }, 150);
+                        }
+                      }}
+                      className="w-full text-left flex gap-2 text-xs p-2 rounded-lg hover:bg-[#18181b] border border-transparent hover:border-[#27272a] transition-all group"
+                    >
+                      <span className="font-mono text-zinc-500 shrink-0 group-hover:text-cyan-400 transition-colors">{pat.id}</span>
+                      <span className="text-zinc-300 line-clamp-1 truncate" title={pat.title}>{pat.title}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex-1 flex items-center text-xs text-zinc-500 italic">
+                  No competing patents flagged for this target/indication pair.
+                </div>
+              )}
+              <div className="flex justify-between items-center text-[10px] text-zinc-500 border-t border-[#27272a] pt-3 mt-3">
+                <span className="flex items-center gap-1.5"><Database className="w-3 h-3" /> USPTO API</span>
+                <span>{patentCount} Results</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
     </div>
+    </>
   );
 }
 
@@ -376,10 +469,11 @@ function EvidenceChain({ opportunity, report }: { opportunity: any; report: any 
 // Main AI Synthesis Tab
 // ─────────────────────────────────────────────
 
-export function AISynthesisTab({ report }: { report: any }) {
+export function AISynthesisTab({ report, setActiveSidebar }: { report: any; setActiveSidebar?: any }) {
   const [sortKey, setSortKey] = useState<'composite_score' | 'market_size' | 'condition'>('composite_score');
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
   const [filterMin, setFilterMin] = useState<number>(0);
+  const [activeEvidenceCondition, setActiveEvidenceCondition] = useState<string | null>(null);
 
   const opportunities = useMemo(() => {
     const candidates: any[] = report.repurposing_candidates || [];
@@ -445,6 +539,16 @@ export function AISynthesisTab({ report }: { report: any }) {
     else { setSortKey(key); setSortDir('desc'); }
   };
 
+  useEffect(() => {
+    if (sorted.length > 0) {
+      if (!activeEvidenceCondition || !sorted.find(o => o.condition === activeEvidenceCondition)) {
+        setActiveEvidenceCondition(sorted[0].condition);
+      }
+    } else {
+      setActiveEvidenceCondition(null);
+    }
+  }, [sorted, activeEvidenceCondition]);
+
   // Fix: proper setter name
   function setsSortDir(fn: (d: 'asc' | 'desc') => 'asc' | 'desc') {
     setSortDir(prev => fn(prev));
@@ -452,7 +556,7 @@ export function AISynthesisTab({ report }: { report: any }) {
 
   const SortIcon = ({ k }: { k: typeof sortKey }) => (
     sortKey === k
-      ? <span className="ml-1 text-indigo-400">{sortDir === 'desc' ? '↓' : '↑'}</span>
+      ? <span className="ml-1 text-cyan-400">{sortDir === 'desc' ? '↓' : '↑'}</span>
       : <span className="ml-1 text-zinc-700">↕</span>
   );
 
@@ -463,7 +567,7 @@ export function AISynthesisTab({ report }: { report: any }) {
       <div className="flex items-center gap-4 flex-wrap">
         <div>
           <h2 className="text-2xl font-semibold text-zinc-100 flex items-center gap-2">
-            <TrendingUp className="w-6 h-6 text-indigo-400" /> AI Synthesis — Opportunities
+            <TrendingUp className="w-6 h-6 text-cyan-400" /> AI Synthesis — Opportunities
           </h2>
           <p className="text-sm text-zinc-500 mt-1">
             Cross-domain opportunity matrix with full evidence traceability. Every claim links to its source.
@@ -478,7 +582,7 @@ export function AISynthesisTab({ report }: { report: any }) {
               className={clsx(
                 'px-2.5 py-1 rounded-lg text-xs font-mono transition-colors border',
                 filterMin === v
-                  ? 'bg-indigo-500 text-white border-indigo-600'
+                  ? 'bg-cyan-500 text-white border-cyan-600'
                   : 'bg-[#121214] border-[#27272a] text-zinc-400 hover:border-zinc-600'
               )}
             >{v === 0 ? 'All' : `≥${v}`}</button>
@@ -497,7 +601,7 @@ export function AISynthesisTab({ report }: { report: any }) {
       {/* ─── Opportunity Matrix Table ─── */}
       <section>
         <h3 className="text-lg font-medium text-zinc-100 mb-4 flex items-center gap-2">
-          <Database className="w-4 h-4 text-indigo-400" /> Opportunity Matrix
+          <Database className="w-4 h-4 text-cyan-400" /> Opportunity Matrix
         </h3>
 
         {sorted.length === 0 ? (
@@ -585,54 +689,117 @@ export function AISynthesisTab({ report }: { report: any }) {
         )}
       </section>
 
-      {/* ─── Evidence Chain Accordion ─── */}
+      {/* ─── Evidence Chains ─── */}
       <section>
-        <h3 className="text-lg font-medium text-zinc-100 mb-2 flex items-center gap-2">
-          <CheckCircle className="w-4 h-4 text-indigo-400" /> Evidence Chains
-          <span className="text-xs text-zinc-500 font-normal">— expand each opportunity to see every supporting source</span>
-        </h3>
-        <p className="text-xs text-zinc-600 mb-5">
-          Every clinical trial shows its NCT number. Every publication shows its PMID. Every patent links to USPTO. No unsourced claims.
-        </p>
-        <div className="space-y-3">
-          {sorted.map(opp => (
-            <EvidenceChain key={opp.condition} opportunity={opp} report={report} />
-          ))}
+        <div className="mb-5">
+          <h3 className="text-lg font-medium text-zinc-100 flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 text-cyan-400" /> Evidence Synthesis Layout
+          </h3>
+          <p className="text-xs text-zinc-500 mt-1">
+            Navigate through candidate conditions to explore detailed clinical, literature, and IP evidence.
+          </p>
         </div>
+
+        {sorted.length === 0 ? (
+          <div className="bg-[#121214] border border-[#27272a] rounded-xl p-8 text-center">
+            <p className="text-zinc-500 text-sm">No evidence chains available for the current filter.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch w-full">
+            
+            {/* Left Nav Pane - List of Conditions */}
+            <div className="lg:col-span-4 flex flex-col h-full bg-[#121214] border border-[#27272a] rounded-xl overflow-hidden max-h-[700px]">
+              <div className="px-4 py-3 bg-[#09090b] border-b border-[#27272a]">
+                <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Candidate Diseases</h4>
+              </div>
+              <div className="flex-1 overflow-y-auto custom-scrollbar">
+                {sorted.map(opp => {
+                  const isActive = activeEvidenceCondition === opp.condition;
+                  return (
+                    <button
+                      key={opp.condition}
+                      onClick={() => setActiveEvidenceCondition(opp.condition)}
+                      className={clsx(
+                        "w-full flex items-center justify-between px-4 py-3 border-b border-[#27272a] transition-all text-left group",
+                        isActive ? "bg-[#18181b] border-l-2 border-l-cyan-500 pl-[14px]" : "hover:bg-[#18181b]/50 border-l-2 border-l-transparent pl-[14px]"
+                      )}
+                    >
+                      <div className="flex-1 min-w-0 pr-4">
+                        <span className={clsx("block truncate text-sm font-medium transition-colors", isActive ? "text-cyan-400" : "text-zinc-300 group-hover:text-zinc-100")}>
+                          {opp.condition}
+                        </span>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className={clsx("text-[10px] uppercase font-semibold", opp.clinical_level.includes('Approved') ? 'text-emerald-400' : 'text-zinc-500')}>
+                            {opp.clinical_level}
+                          </span>
+                        </div>
+                      </div>
+                      <Badge className={clsx('text-[10px] shrink-0 border font-mono px-1.5 py-0', 
+                        scoreColor(opp.composite_score).bg, 
+                        scoreColor(opp.composite_score).text, 
+                        scoreColor(opp.composite_score).border
+                      )}>
+                        {opp.composite_score.toFixed(1)}
+                      </Badge>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Right Pane - Detail View */}
+            <div className="lg:col-span-8 flex flex-col h-full max-h-[700px]">
+               {activeEvidenceCondition && (
+                 <EvidenceChainDetail 
+                   opportunity={sorted.find(o => o.condition === activeEvidenceCondition)} 
+                   report={report} 
+                   setActiveSidebar={setActiveSidebar}
+                 />
+               )}
+            </div>
+
+          </div>
+        )}
       </section>
 
       {/* ─── Pathway Overlap Panel ─── */}
       <section>
         <h3 className="text-lg font-medium text-zinc-100 mb-4 flex items-center gap-2">
-          <Network className="w-4 h-4 text-indigo-400" /> Mechanistic Pathway Overlap
-          <span className="text-xs text-zinc-500 font-normal ml-1">Drug → Target → Candidate Disease</span>
+          <Network className="w-4 h-4 text-cyan-400" /> Mechanistic Pathway Overlap
         </h3>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <PathwayOverlapPanel report={report} />
-          <div className="bg-[#121214] border border-[#27272a] rounded-2xl p-6 space-y-4">
-            <h4 className="text-sm font-medium text-zinc-300 flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4 text-amber-400" /> Interpretation Guide
-            </h4>
-            <div className="space-y-3 text-sm text-zinc-500 leading-relaxed">
-              <p>
-                <span className="text-zinc-300 font-medium">Shared pathways</span> indicate that the drug's primary mechanism
-                of action may produce downstream effects relevant to the candidate disease — reducing development risk.
-              </p>
-              <p>
-                <span className="text-zinc-300 font-medium">Multi-target overlap</span> (edges from drug hub to multiple diseases
-                via same target node) is the strongest repurposing signal.
-              </p>
-              <p>
-                <span className="text-zinc-300 font-medium">Patent openness</span> for each condition is shown in the
-                Evidence Chain section. Open IP spaces represent highest opportunity.
-              </p>
+
+        {/* Full-width graph */}
+        <PathwayOverlapPanel report={report} />
+
+        {/* Compact interpretation strip below */}
+        <div className="mt-4 bg-[#121214] border border-[#27272a] rounded-xl px-5 py-4">
+          <div className="flex flex-wrap gap-x-8 gap-y-3">
+            <div className="flex items-start gap-2 min-w-0">
+              <ShieldAlert className="w-3.5 h-3.5 text-amber-400 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-xs font-medium text-zinc-300">Interpretation Guide</p>
+                <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed max-w-xs">
+                  Shared pathways = reduced dev risk. Multi-target edges = strongest repurposing signal.
+                </p>
+              </div>
             </div>
-            <div className="border-t border-[#27272a] pt-4">
-              <p className="text-[10px] text-zinc-600 flex items-center gap-1">
-                <Database className="w-3 h-3" />
-                Data sources: PubChem Pharmacology, Open Targets target-disease associations,
-                ClinicalTrials.gov v2, USPTO PatentsView
-              </p>
+            <div className="flex items-start gap-2 min-w-0">
+              <Database className="w-3.5 h-3.5 text-cyan-400 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-xs font-medium text-zinc-300">Data Sources</p>
+                <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">
+                  PubChem · Open Targets · ClinicalTrials.gov · USPTO
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2 min-w-0">
+              <Network className="w-3.5 h-3.5 text-cyan-400 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-xs font-medium text-zinc-300">Open IP</p>
+                <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">
+                  Patent openness per indication is visible in the Evidence Chains above.
+                </p>
+              </div>
             </div>
           </div>
         </div>

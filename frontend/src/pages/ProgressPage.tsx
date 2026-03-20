@@ -311,7 +311,7 @@ export default function ProgressPage() {
       {/* Header */}
       <header className="absolute top-0 w-full px-8 py-6 flex justify-between items-center z-50">
         <div className="flex flex-col">
-          <div className="text-zinc-100 font-semibold text-sm tracking-tight">Blueprints Pipeline</div>
+          <div className="text-zinc-100 font-semibold text-sm tracking-tight">Agent Pipeline</div>
           <div className="text-zinc-500 text-xs mt-0.5 flex items-center gap-3">
             {job?.molecule ? `Analyzing ${job.molecule}` : 'Multi-Agent Orchestration'}
             <button 
@@ -327,7 +327,7 @@ export default function ProgressPage() {
           <div className="text-xs text-zinc-400 font-medium">{progressPercent}% complete</div>
           <div className="w-full h-0.5 bg-zinc-900 rounded-full overflow-hidden">
             <div
-              className="h-full transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] bg-indigo-500"
+              className="h-full transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] bg-cyan-500"
               style={{ width: `${progressPercent}%` }}
             />
           </div>
@@ -406,7 +406,7 @@ export default function ProgressPage() {
                 <div
                   className="mt-6 border px-5 py-2 rounded-lg text-xs font-medium shadow-xl transition-all duration-700"
                   style={{
-                    borderColor: isCurrent ? (useColor ? step.color : '#6366f1') : '#27272a',
+                    borderColor: isCurrent ? (useColor ? step.color : '#06b6d4') : '#27272a',
                     backgroundColor: isCurrent ? '#18181b' : '#09090b',
                     color: isCurrent ? (useColor ? step.color : '#e4e4e7') : '#71717a',
                   }}
@@ -488,7 +488,7 @@ export default function ProgressPage() {
           key={`header-${activeStepIndex}`}
           className="border border-zinc-800/80 bg-zinc-950 rounded-lg px-4 py-2.5 flex items-center gap-3 self-start shadow-xl animate-in slide-in-from-bottom-2 fade-in duration-500"
         >
-          <Sparkles size={14} className="text-indigo-400" />
+          <Sparkles size={14} className="text-cyan-400" />
           <span className="text-sm font-medium text-zinc-100">{currentStep.query}</span>
         </div>
 
