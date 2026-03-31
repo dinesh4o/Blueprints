@@ -49,7 +49,7 @@ export default function SharedReportPage() {
 
   useEffect(() => {
     if (!token) return;
-    fetch(`/api/shared/${token}`)
+    fetch(`/api/shared/${token}`, { credentials: 'include' })
       .then(r => { if (!r.ok) throw new Error('Report not found'); return r.json(); })
       .then(data => { setReport(data); setLoading(false); })
       .catch(err => { setError(err.message); setLoading(false); });

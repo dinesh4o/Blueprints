@@ -88,7 +88,7 @@ export default function CommunityPage() {
 
   const fetchThreads = async () => {
     try {
-      const res = await fetch("/api/community");
+      const res = await fetch("/api/community", { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setThreads(data);
@@ -135,6 +135,7 @@ export default function CommunityPage() {
       await fetch("/api/community", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: 'include',
         body: JSON.stringify(payload)
       });
       await fetchThreads();
@@ -156,6 +157,7 @@ export default function CommunityPage() {
       await fetch(`/api/community/${threadId}/upvote`, { 
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: 'include',
         body: JSON.stringify({ userId })
       });
       await fetchThreads();
@@ -181,6 +183,7 @@ export default function CommunityPage() {
       await fetch(`/api/community/${threadId}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: 'include',
         body: JSON.stringify({
           author: user?.name || user?.email || "Anonymous Researcher",
           avatar: user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email || "User"}&backgroundColor=e2e8f0`,
@@ -202,7 +205,7 @@ export default function CommunityPage() {
 
   const confirmDeleteThread = async (id: string) => {
     try {
-      await fetch(`/api/community/${id}`, { method: 'DELETE' });
+      await fetch(`/api/community/${id}`, { method: 'DELETE', credentials: 'include' });
       if (expandedThread === id) setExpandedThread(null);
       await fetchThreads();
     } catch (err) { console.error(err); }
@@ -222,6 +225,7 @@ export default function CommunityPage() {
       await fetch(`/api/community/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ title: editThreadTitle, content: editThreadContent })
       });
       setEditingThreadId(null);
@@ -236,7 +240,7 @@ export default function CommunityPage() {
 
   const confirmDeleteComment = async (threadId: string, commentId: string) => {
     try {
-      await fetch(`/api/community/${threadId}/comments/${commentId}`, { method: 'DELETE' });
+      await fetch(`/api/community/${threadId}/comments/${commentId}`, { method: 'DELETE', credentials: 'include' });
       await fetchThreads();
     } catch (err) { console.error(err); }
   };
@@ -254,6 +258,7 @@ export default function CommunityPage() {
       await fetch(`/api/community/${threadId}/comments/${commentId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ content: editCommentContent })
       });
       setEditingCommentId(null);

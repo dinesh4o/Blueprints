@@ -14,7 +14,7 @@ export default function PortfolioPage() {
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    fetch('/api/history')
+    fetch('/api/history', { credentials: 'include' })
       .then(r => r.json())
       .then(data => {
         if (Array.isArray(data)) {

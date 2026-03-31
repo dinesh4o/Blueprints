@@ -7,6 +7,7 @@ interface User {
   avatar?: string;
   authProvider: 'local' | 'google';
   hasPassword?: boolean;
+  plan?: 'free' | 'researcher' | 'organization';
 }
 
 interface AuthContextType {

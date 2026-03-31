@@ -1,8 +1,16 @@
 import { Router, Request, Response } from 'express';
 import passport from 'passport';
+import crypto from 'crypto';
+import Razorpay from 'razorpay';
 import { User } from '../models/User';
+import { Job } from '../models/Job';
 
 const router = Router();
+
+const razorpayInstance = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID || '',
+  key_secret: process.env.RAZORPAY_KEY_SECRET || '',
+});
 
 // @route   POST /api/auth/signup
 // @desc    Register new user
@@ -47,6 +55,9 @@ router.post('/signup', async (req: Request, res: Response) => {
           name: user.name,
           avatar: user.avatar,
           hasPassword: !!user.password,
+          plan: user.plan || 'free',
+          planPaidAt: user.planPaidAt,
+          createdAt: user.createdAt,
         },
       });
     });
@@ -117,6 +128,9 @@ router.post('/login', async (req: Request, res: Response) => {
           name: user.name,
           avatar: user.avatar,
           hasPassword: !!user.password,
+          plan: user.plan || 'free',
+          planPaidAt: user.planPaidAt,
+          createdAt: user.createdAt,
         },
       });
     });
@@ -151,6 +165,9 @@ router.get('/me', (req: Request, res: Response) => {
       avatar: user.avatar,
       authProvider: user.authProvider,
       hasPassword: !!user.password,
+      plan: user.plan || 'free',
+      planPaidAt: user.planPaidAt,
+      createdAt: user.createdAt,
     },
   });
 });
@@ -251,6 +268,9 @@ router.put('/profile', async (req: Request, res: Response) => {
         avatar: dbUser.avatar,
         authProvider: dbUser.authProvider,
         hasPassword: !!dbUser.password,
+        plan: dbUser.plan || 'free',
+        planPaidAt: dbUser.planPaidAt,
+        createdAt: dbUser.createdAt,
       },
     });
   } catch (error: any) {
@@ -294,6 +314,112 @@ router.put('/password', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Password update error:', error);
     res.status(500).json({ success: false, message: 'Failed to update password' });
+  }
+});
+
+// ─── Razorpay: Create Order ──────────────────────────────────────────────────
+router.post('/create-order', async (req: Request, res: Response) => {
+  if (!req.user) {
+    return res.status(401).json({ success: false, message: 'Not authenticated' });
+  }
+  try {
+    const { plan } = req.body;
+    const PLAN_AMOUNTS: Record<string, number> = {
+      researcher: 99900, // ₹999 in paise
+      organization: 249900, // ₹2,499 in paise
+    };
+    const amount = PLAN_AMOUNTS[plan?.toLowerCase()];
+    if (!amount) {
+      return res.status(400).json({ success: false, message: 'Invalid plan' });
+    }
+
+    const order = await razorpayInstance.orders.create({
+      amount,
+      currency: 'INR',
+      receipt: `plan_${plan}_${Date.now()}`,
+      notes: { plan, userId: (req.user as any)._id.toString() },
+    });
+
+    res.json({ success: true, order });
+  } catch (error: any) {
+    console.error('Razorpay order creation error:', error);
+    res.status(500).json({ success: false, message: 'Failed to create order' });
+  }
+});
+
+// ─── Razorpay: Verify Payment & Activate Plan ───────────────────────────────
+router.post('/verify-payment', async (req: Request, res: Response) => {
+  if (!req.user) {
+    return res.status(401).json({ success: false, message: 'Not authenticated' });
+  }
+  try {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, plan } = req.body;
+
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({ success: false, message: 'Missing payment details' });
+    }
+
+    // Verify signature
+    const body = razorpay_order_id + '|' + razorpay_payment_id;
+    const expectedSignature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || '')
+      .update(body)
+      .digest('hex');
+
+    if (expectedSignature !== razorpay_signature) {
+      return res.status(400).json({ success: false, message: 'Payment verification failed' });
+    }
+
+    // Update user plan
+    const { _id } = req.user as any;
+    const dbUser = await User.findById(_id);
+    if (!dbUser) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const validPlans = ['researcher', 'organization'];
+    const selectedPlan = validPlans.includes(plan?.toLowerCase()) ? plan.toLowerCase() : 'researcher';
+    dbUser.plan = selectedPlan as any;
+    dbUser.planPaidAt = new Date();
+    await dbUser.save();
+
+    res.json({
+      success: true,
+      message: 'Payment verified and plan activated',
+      user: {
+        id: dbUser._id,
+        email: dbUser.email,
+        name: dbUser.name,
+        avatar: dbUser.avatar,
+        authProvider: dbUser.authProvider,
+        hasPassword: !!dbUser.password,
+        plan: dbUser.plan,
+        planPaidAt: dbUser.planPaidAt,
+        createdAt: dbUser.createdAt,
+      },
+    });
+  } catch (error: any) {
+    console.error('Payment verification error:', error);
+    res.status(500).json({ success: false, message: 'Payment verification failed' });
+  }
+});
+
+// @route   GET /api/auth/stats
+// @desc    Get user analysis stats
+// @access  Private
+router.get('/stats', async (req: Request, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'Not authenticated' });
+    }
+    const userId = (req.user as any)._id;
+    const [analysisRuns, reportsGenerated] = await Promise.all([
+      Job.countDocuments({ userId }),
+      Job.countDocuments({ userId, status: 'completed', reportData: { $exists: true, $ne: null } }),
+    ]);
+    res.json({ success: true, analysisRuns, reportsGenerated });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to fetch stats' });
   }
 });
 
