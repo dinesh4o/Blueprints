@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowUp, Sparkles, LayoutGrid, Command, Search as SearchIcon, Shield, TrendingUp, Menu, X, History, ChevronRight, FileText, Database, Activity } from "lucide-react";
+import { ArrowUp, Sparkles, LayoutGrid, Command, Search as SearchIcon, Shield, TrendingUp, Menu, X, History, ChevronRight, FileText, Database, Activity, GitCompare, Mic } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { LiquidBackground } from "@/components/LiquidBackground";
 import { ShaderButton } from "@/components/ui/ShaderButton";
+import { VoiceSearch } from "@/components/VoiceSearch";
+import { ParticleConstellation } from "@/components/ParticleConstellation";
 
 function FloatingCard({
   icon: Icon,
@@ -126,6 +128,9 @@ export default function SearchPage() {
 
   return (
     <div className="min-h-screen bg-[#000000] text-zinc-200 font-sans selection:bg-zinc-800 flex flex-col relative overflow-hidden">
+      
+      {/* Interactive Particle Background */}
+      <ParticleConstellation className="opacity-40" />
       
       {/* History Side Panel */}
       <AnimatePresence>
@@ -271,9 +276,19 @@ export default function SearchPage() {
               className="w-full bg-zinc-900/80 hover:bg-zinc-800/80 focus:bg-zinc-900 transition-all duration-300 border border-zinc-700/50 focus:border-zinc-300/80 rounded-full pl-6 pr-24 py-4 text-base text-zinc-100 placeholder:text-zinc-400 focus:outline-none"
             />
             {/* Command K indicator */}
-            <div className="absolute right-14 top-1/2 -translate-y-1/2 flex items-center gap-1 text-zinc-500 pointer-events-none hidden sm:flex border border-zinc-800 rounded px-2 py-0.5">
+            <div className="absolute right-[110px] top-1/2 -translate-y-1/2 flex items-center gap-1 text-zinc-500 pointer-events-none hidden sm:flex border border-zinc-800 rounded px-2 py-0.5">
               <Command size={12} />
               <span className="text-[10px] font-semibold">K</span>
+            </div>
+
+            {/* Voice Search */}
+            <div className="absolute right-14 top-1/2 -translate-y-1/2 z-10">
+              <VoiceSearch
+                onResult={(text) => {
+                  setQuery(text);
+                  handleAnalyze(text);
+                }}
+              />
             </div>
             
             <button 
@@ -334,12 +349,21 @@ export default function SearchPage() {
       </main>
 
       {/* Floating Bottom Right Nav/Support */}
-      <button 
-        onClick={() => navigate("/community")}
-        className="absolute bottom-6 right-6 w-12 h-12 bg-white/5 hover:bg-white/10 rounded-xl flex items-center justify-center text-zinc-400 hover:text-white backdrop-blur-md transition-colors z-50 border border-white/10"
-      >
-        <LayoutGrid size={20} />
-      </button>
+      <div className="absolute bottom-6 right-6 flex items-center gap-3 z-50">
+        <button 
+          onClick={() => navigate("/compare")}
+          className="w-12 h-12 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-xl flex items-center justify-center text-indigo-400 hover:text-indigo-300 backdrop-blur-md transition-colors border border-indigo-500/20"
+          title="Compare two drugs"
+        >
+          <GitCompare size={20} />
+        </button>
+        <button 
+          onClick={() => navigate("/community")}
+          className="w-12 h-12 bg-white/5 hover:bg-white/10 rounded-xl flex items-center justify-center text-zinc-400 hover:text-white backdrop-blur-md transition-colors border border-white/10"
+        >
+          <LayoutGrid size={20} />
+        </button>
+      </div>
       
     </div>
   );

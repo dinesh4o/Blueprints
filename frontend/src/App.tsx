@@ -16,6 +16,8 @@ const CommunityPage = lazy(() => import('./pages/CommunityPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
 const SignupPage = lazy(() => import('./pages/SignupPage').then(m => ({ default: m.SignupPage })));
 const ProfilePage = lazy(() => import('./pages/ProfilePage').then(m => ({ default: m.ProfilePage })));
+const ComparePage = lazy(() => import('./pages/ComparePage'));
+const SharedReportPage = lazy(() => import('./pages/SharedReportPage'));
 
 // A simple fallback for Suspense
 const PageLoader = () => (
@@ -43,8 +45,10 @@ export default function App() {
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/signup" element={<SignupPage />} />
 
+
                   {/* Landing page is public — auth check happens on "Start Analysis" */}
                   <Route path="/" element={<LandingPage />} />
+                  <Route path="/shared/:token" element={<SharedReportPage />} />
 
                   {/* Protected routes */}
                   <Route
@@ -100,6 +104,14 @@ export default function App() {
                     element={
                       <ProtectedRoute>
                         <CommunityPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/compare"
+                    element={
+                      <ProtectedRoute>
+                        <ComparePage />
                       </ProtectedRoute>
                     }
                   />

@@ -273,6 +273,7 @@ async function fetchSimilarMolecules(state: typeof GraphState.State) {
       .filter(r => r.status === 'fulfilled' && r.value)
       .map(r => (r as PromiseFulfilledResult<any>).value);
 
+    return { similarMolecules };
   } catch (error: any) {
     console.error('[SimilarityAgent] API failed:', error.message);
     return { similarMolecules: null };
@@ -360,12 +361,33 @@ async function fetchRegulatoryData(state: typeof GraphState.State) {
     }
 
     let beneficial_faers_hit = false;
+    let faers_reactions: { term: string; count: number }[] = [];
     try {
         // Serendipity signal check
         const faersUrl = `https://api.fda.gov/drug/event.json?search=patient.drug.medicinalproduct:"${termUpper}"+AND+(patient.reaction.reactionmeddrapt:"hair+growth"+patient.reaction.reactionmeddrapt:"erection")&limit=1`;
         const faersRes = await axios.get(faersUrl, { timeout: 3000 });
         if (faersRes.data?.results?.length > 0) beneficial_faers_hit = true;
     } catch (e) {}
+
+    // FAERS adverse event reaction counts (top 20 reactions by report count)
+    try {
+      const faersCountUrl = `https://api.fda.gov/drug/event.json?search=patient.drug.openfda.generic_name:"${termUpper}"&count=patient.reaction.reactionmeddrapt.exact&limit=25`;
+      const faersCountRes = await axios.get(faersCountUrl, { timeout: 5000 });
+      faers_reactions = (faersCountRes.data?.results || []).map((r: any) => ({
+        term: r.term,
+        count: r.count,
+      }));
+    } catch (e) {
+      // Try alternative search with substance_name
+      try {
+        const faersAltUrl = `https://api.fda.gov/drug/event.json?search=patient.drug.openfda.substance_name:"${termUpper}"&count=patient.reaction.reactionmeddrapt.exact&limit=25`;
+        const faersAltRes = await axios.get(faersAltUrl, { timeout: 5000 });
+        faers_reactions = (faersAltRes.data?.results || []).map((r: any) => ({
+          term: r.term,
+          count: r.count,
+        }));
+      } catch (e2) {}
+    }
 
     // Extract unique indication paragraphs
     const uniqueInds = new Set<string>();
@@ -393,6 +415,7 @@ async function fetchRegulatoryData(state: typeof GraphState.State) {
         has_breakthrough_designation: allResults.some(r => JSON.stringify(r).toLowerCase().includes('breakthrough')),
         indications: indicationsList[0]?.substring(0, 200) || 'None found',
         warnings: allResults[0]?.boxed_warning?.[0]?.substring(0, 200) || 'None',
+        faers_reactions,
       }
     };
   } catch (err: any) {
@@ -401,9 +424,123 @@ async function fetchRegulatoryData(state: typeof GraphState.State) {
   }
 }
 
-// Target Agent (Open Targets placeholder)
+// Target Agent — Real Open Targets Platform GraphQL API (free, no key required)
 async function fetchTargetData(state: typeof GraphState.State) {
-  return { targetData: { score: null, targetsFound: 0 } };
+  try {
+    const molecule = state.molecule;
+
+    // Step 1: Search for the drug entity in Open Targets
+    const searchQuery = `
+      query {
+        search(queryString: "${molecule.replace(/"/g, '\\"')}", entityNames: ["drug"], page: { size: 1, index: 0 }) {
+          hits {
+            id
+            entity
+            name
+            description
+          }
+        }
+      }
+    `;
+
+    const searchRes = await axios.post(
+      'https://api.platform.opentargets.org/api/v4/graphql',
+      { query: searchQuery },
+      { timeout: 10000, headers: { 'Content-Type': 'application/json' } }
+    );
+
+    const drugHit = searchRes.data?.data?.search?.hits?.[0];
+    if (!drugHit) {
+      console.log('[TargetAgent] No drug found in Open Targets for:', molecule);
+      return { targetData: { score: null, targetsFound: 0, source: 'Open Targets', targets: [], diseases: [], mechanisms: [] } };
+    }
+
+    const chemblId = drugHit.id;
+
+    // Step 2: Get drug details — mechanisms, linked targets, linked diseases, withdrawal info
+    const drugQuery = `
+      query {
+        drug(chemblId: "${chemblId}") {
+          id
+          name
+          drugType
+          maximumClinicalTrialPhase
+          hasBeenWithdrawn
+          withdrawnNotice { year reasons { reason } countries }
+          mechanismsOfAction {
+            rows {
+              mechanismOfAction
+              targets { id approvedName approvedSymbol }
+              actionType
+            }
+          }
+          linkedDiseases { count rows { id name } }
+          linkedTargets { count rows { id approvedName approvedSymbol } }
+        }
+      }
+    `;
+
+    const drugRes = await axios.post(
+      'https://api.platform.opentargets.org/api/v4/graphql',
+      { query: drugQuery },
+      { timeout: 12000, headers: { 'Content-Type': 'application/json' } }
+    );
+
+    const drug = drugRes.data?.data?.drug;
+    if (!drug) {
+      return { targetData: { score: null, targetsFound: 0, source: 'Open Targets', targets: [], diseases: [], mechanisms: [] } };
+    }
+
+    const targets = (drug.linkedTargets?.rows || []).slice(0, 10).map((t: any) => ({
+      id: t.id,
+      name: t.approvedName,
+      symbol: t.approvedSymbol,
+    }));
+
+    const diseases = (drug.linkedDiseases?.rows || []).slice(0, 15).map((d: any) => ({
+      id: d.id,
+      name: d.name,
+    }));
+
+    const mechanisms = (drug.mechanismsOfAction?.rows || []).map((m: any) => ({
+      description: m.mechanismOfAction,
+      actionType: m.actionType,
+      targetName: m.targets?.[0]?.approvedName || 'Unknown',
+      targetSymbol: m.targets?.[0]?.approvedSymbol || '',
+    }));
+
+    const targetsFound = drug.linkedTargets?.count || targets.length;
+    const diseasesFound = drug.linkedDiseases?.count || diseases.length;
+
+    // Compute a real association score based on target and disease coverage
+    const score = Math.min(
+      ((targetsFound > 0 ? 0.4 : 0) + (diseasesFound > 3 ? 0.3 : diseasesFound > 0 ? 0.15 : 0) + (mechanisms.length > 0 ? 0.3 : 0)),
+      1.0
+    );
+
+    console.log(`[TargetAgent] Open Targets: ${chemblId} → ${targetsFound} targets, ${diseasesFound} diseases, ${mechanisms.length} mechanisms`);
+
+    return {
+      targetData: {
+        chemblId,
+        drugName: drug.name,
+        drugType: drug.drugType,
+        maxPhase: drug.maximumClinicalTrialPhase,
+        hasBeenWithdrawn: drug.hasBeenWithdrawn || false,
+        withdrawnNotice: drug.withdrawnNotice || null,
+        score,
+        targetsFound,
+        diseasesFound,
+        targets,
+        diseases,
+        mechanisms,
+        source: 'Open Targets Platform',
+      }
+    };
+  } catch (err: any) {
+    console.error('[TargetAgent] Open Targets API failed:', err.message);
+    return { targetData: { score: null, targetsFound: 0, source: 'Open Targets', targets: [], diseases: [], mechanisms: [] } };
+  }
 }
 
 
@@ -466,12 +603,17 @@ async function fetchPatentData(state: typeof GraphState.State) {
         const keys = getGroqKeys();
         const pc = state.pubchemData;
         const sm = state.similarMolecules || [];
+        const td = state.targetData || {};
 
         const pharmaContext = pc?.exists ? [
           `Formula: ${pc.molecular_formula}, MW: ${pc.molecular_weight} g/mol`,
           pc.mechanism_of_action ? `MOA: ${pc.mechanism_of_action?.substring(0, 300)}` : null,
           pc.associated_diseases?.length ? `Associated diseases: ${pc.associated_diseases.slice(0, 6).join(', ')}` : null,
         ].filter(Boolean).join('\n') : 'Not in PubChem';
+
+        const targetContext = td.targets?.length
+          ? `Open Targets: ${td.targetsFound} targets (${td.targets.slice(0, 5).map((t: any) => t.symbol || t.name).join(', ')}), ${td.diseasesFound} linked diseases (${td.diseases?.slice(0, 5).map((d: any) => d.name).join(', ')}), Mechanisms: ${td.mechanisms?.slice(0, 3).map((m: any) => m.description).join('; ')}`
+          : 'No Open Targets data';
 
         const analogContext = sm.length
           ? sm.map(a => `• ${a.name} (${a.formula}): ${a.repurposing_insight}`).join('\n')
@@ -598,6 +740,7 @@ ANTI-BIAS GUARD & ABSOLUTE RULES
 4. If drug has 0 repurposed FDA approvals -> Never score above 6.5 total regardless of trial count.
 === Empirical Data ===
 PubChem: ${pharmaContext}
+Open Targets: ${targetContext}
 Clinical Trials (${state.clinicalData?.length || 0} studies): ${JSON.stringify(state.clinicalData?.slice(0, 5))}
 Literature: ${state.literatureData?.length || 0} papers (Total PubMed corpus: ${state.total_pubmed_papers})
 Regulatory: ${state.regulatoryData?.all_indications?.length || 0} distinct labels found.

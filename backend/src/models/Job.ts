@@ -7,6 +7,7 @@ export interface IJob extends Document {
   currentStep: string;
   progress: number;
   reportData?: any;
+  shareToken?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -23,6 +24,7 @@ const JobSchema = new Schema<IJob>(
     currentStep: { type: String, default: 'Initializing AI analysis...' },
     progress: { type: Number, default: 0 },
     reportData: { type: Schema.Types.Mixed }, // Store the finalized report JSON
+    shareToken: { type: String, index: true, sparse: true },
   },
   { timestamps: true }
 );

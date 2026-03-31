@@ -468,6 +468,38 @@ async function startServer() {
     res.json(report);
   });
 
+  // ─── Share a report — generate a public share token ──────────────────────
+  app.post('/api/reports/:id/share', async (req, res) => {
+    try {
+      const job = await Job.findById(req.params.id);
+      if (!job || !job.reportData) {
+        return res.status(404).json({ error: 'Report not found' });
+      }
+      if (!job.shareToken) {
+        job.shareToken = crypto.randomBytes(16).toString('hex');
+        await job.save();
+      }
+      res.json({ shareToken: job.shareToken });
+    } catch (err) {
+      console.error('Share token error:', err);
+      res.status(500).json({ error: 'Failed to generate share link' });
+    }
+  });
+
+  // ─── Public shared report access (no auth required) ─────────────────────
+  app.get('/api/shared/:token', async (req, res) => {
+    try {
+      const job = await Job.findOne({ shareToken: req.params.token });
+      if (!job || !job.reportData) {
+        return res.status(404).json({ error: 'Shared report not found or link expired' });
+      }
+      res.json(job.reportData);
+    } catch (err) {
+      console.error('Shared report error:', err);
+      res.status(500).json({ error: 'Failed to load shared report' });
+    }
+  });
+
   app.get('/api/reports/:id/pdf', async (req, res) => {
     try {
       let report = reports.get(req.params.id);
@@ -702,11 +734,88 @@ async function startServer() {
       updateStep(2, 'done', `Found ${resultState.patentData?.length || 0} patents.`, resultState.patentData?.length || 0);
       updateStep(3, 'done', 'Abstracts embedded.', literatureData.length);
       updateStep(4, 'done', 'Label data parsed.', 1);
-      updateStep(5, 'done', `Found ${resultState.targetData?.targetsFound || 0} targets.`, resultState.targetData?.targetsFound || 0);
+      updateStep(5, 'done', `Found ${resultState.targetData?.targetsFound || 0} targets via ${resultState.targetData?.source || 'Open Targets'}.`, resultState.targetData?.targetsFound || 0);
 
       const similarMolecules = resultState.similarMolecules || [];
       updateStep(6, 'done', `${similarMolecules.length} structural analogs analyzed`, similarMolecules.length);
       updateStep(7, 'running', 'Synthesizing report...');
+
+      // ── Adversarial Debate: 3 separate LLM calls ──
+      let debate_data: any = null;
+      try {
+        const debateContext = `Compound: ${molecule}
+Phoenix Score: ${resultState.phoenix_score}/10
+Clinical Trials: ${clinicalData.length} studies (Phases: ${[...new Set(clinicalData.map((t: any) => t.phase))].join(', ')})
+Key Conditions: ${[...new Set(clinicalData.map((t: any) => t.condition))].slice(0, 5).join(', ')}
+Regulatory: ${resultState.regulatoryData?.all_indications?.length || 0} FDA indications, Warnings: ${resultState.regulatoryData?.warnings || 'None'}
+Targets: ${resultState.targetData?.targetsFound || 0} targets, ${resultState.targetData?.diseasesFound || 0} diseases (${resultState.targetData?.mechanisms?.slice(0, 2).map((m: any) => m.description).join('; ') || 'Unknown MOA'})
+Patents: ${(resultState.patentData || []).length} patent filings
+Literature: ${literatureData.length} papers (${resultState.total_pubmed_papers || 0} total PubMed)
+Top Opportunities: ${(resultState.top_opportunities || []).join('; ')}
+Top Risks: ${(resultState.top_risks || []).join('; ')}
+AI Viability Score: ${resultState.viabilityScore}/10`;
+
+        const debateKeys = getGroqKeys('chat');
+        
+        async function callGroqDebate(systemPrompt: string, userPrompt: string): Promise<string> {
+          for (const key of debateKeys) {
+            try {
+              const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  model: 'llama-3.3-70b-versatile',
+                  messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: userPrompt }
+                  ],
+                  temperature: 0.4,
+                  max_tokens: 600,
+                }),
+                signal: AbortSignal.timeout(30000),
+              });
+              if (resp.status === 429 || resp.status === 401) continue;
+              if (resp.status === 200) {
+                const data = await resp.json() as any;
+                return data.choices?.[0]?.message?.content || '';
+              }
+            } catch { continue; }
+          }
+          return '';
+        }
+
+        const [advocateArg, skepticArg] = await Promise.all([
+          callGroqDebate(
+            'You are a pharmaceutical investment ADVOCATE. Make the STRONGEST possible case for why this drug should be pursued for repurposing. Be specific with data points. Use exactly 3 numbered arguments. Be concise (max 200 words total).',
+            debateContext
+          ),
+          callGroqDebate(
+            'You are a pharmaceutical RISK ANALYST and SKEPTIC. Identify every reason this repurposing effort could FAIL. Focus on safety signals, IP barriers, competitive landscape, and weak evidence. Use exactly 3 numbered arguments. Be concise (max 200 words total).',
+            debateContext
+          ),
+        ]);
+
+        const consensusArg = await callGroqDebate(
+          'You are an impartial clinical review board judge. Given an advocate\'s and skeptic\'s arguments about a drug repurposing case, produce a final ruling. Respond with EXACTLY this JSON format: {"verdict": "Proceed"|"Caution"|"Reject", "confidence": 0.0-1.0, "reasoning": "2-3 sentence summary", "conditions": ["condition1", "condition2"]}. Only output valid JSON.',
+          `ADVOCATE ARGUMENTS:\n${advocateArg}\n\nSKEPTIC ARGUMENTS:\n${skepticArg}\n\nDATA:\n${debateContext}`
+        );
+
+        let consensus = { verdict: 'Caution', confidence: 0.5, reasoning: 'Analysis pending.', conditions: [] };
+        try {
+          const cleaned = consensusArg.replace(/```json/g, '').replace(/```/g, '').trim();
+          consensus = JSON.parse(cleaned);
+        } catch { /* use default */ }
+
+        debate_data = {
+          advocate: advocateArg,
+          skeptic: skepticArg,
+          consensus,
+        };
+        console.log(`[Debate] Verdict: ${consensus.verdict} (${consensus.confidence})`);
+      } catch (debateErr: any) {
+        console.error('[Debate] Failed:', debateErr.message);
+      }
+
       await new Promise(r => setTimeout(r, 1000));
       updateStep(7, 'done', 'Synthesis generated.');
       
@@ -765,6 +874,7 @@ async function startServer() {
           clinical_data: resultState.clinicalData || [],
           literature_data: resultState.literatureData || [],
           regulatory_data: resultState.regulatoryData || { approved_indications: ['None'], warnings: ['None'] },
+          target_data: resultState.targetData || { targets: [], diseases: [], mechanisms: [], targetsFound: 0 },
           patent_data,
           repurposing_candidates,
           market_analysis,
@@ -777,6 +887,7 @@ async function startServer() {
             top_risks: resultState.top_risks || [],
             reasoning: resultState.analysisReport // Passed directly from Groq!
           },
+          debate_data: debate_data || null,
           created_at: new Date().toISOString(),
         };
 

@@ -4,7 +4,7 @@ import {
   Database, ChevronRight, Search, Download, LayoutGrid, List, Activity, X, Play, Gavel, Bot, ShieldAlert, Scale,
   MessageCircle, ExternalLink, Atom, Box, CheckCircle, TrendingUp, Target, Pill, Zap, Clock, Droplets, GitCompare,
   User, Users, Send, Loader2, BookOpen, ArrowLeft, FlaskConical, DollarSign, FileText, Beaker, Fingerprint, Network,
-  BarChart3, PieChart as PieChartIcon, LineChart as LineChartIcon, ChevronDown, Sparkles, AlertTriangle
+  BarChart3, PieChart as PieChartIcon, LineChart as LineChartIcon, ChevronDown, Sparkles, AlertTriangle, Share2, Check
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -21,6 +21,14 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { MolecularTwinReportCard } from '@/components/MolecularTwinReportCard';
 import { RepurposingAlternativeFinder } from '@/components/RepurposingAlternativeFinder';
 import { SourceBadge } from '@/components/SourceBadge';
+import SafetyHeatmap from '@/components/SafetyHeatmap';
+import IndicationMatrix from '@/components/IndicationMatrix';
+import KOLNetwork from '@/components/KOLNetwork';
+import TopInvestigators from '@/components/TopInvestigators';
+import { KnowledgeGraph } from '@/components/KnowledgeGraph';
+import { RiskRadar } from '@/components/RiskRadar';
+import { AIEvidenceChain } from '@/components/AIEvidenceChain';
+import RegulatoryPathway from '@/components/RegulatoryPathway';
 import { AISynthesisTab } from './AISynthesisPage';
 import ReactMarkdown from 'react-markdown';
 import { exportResearchPaper } from '@/lib/ResearchPaperExport';
@@ -81,7 +89,7 @@ const GaugeScore = ({ score, max, title, subtitle }: any) => {
   );
 };
 
-const DebateSimulation = ({ onClose }: { onClose: () => void }) => {
+const DebateSimulation = ({ onClose, debateData }: { onClose: () => void; debateData?: any }) => {
   const [phase, setPhase] = useState(0);
   useEffect(() => {
     const t1 = setTimeout(() => setPhase(1), 1000);
@@ -91,47 +99,64 @@ const DebateSimulation = ({ onClose }: { onClose: () => void }) => {
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); };
   }, []);
 
+  const advocateText = debateData?.advocate || '';
+  const skepticText = debateData?.skeptic || '';
+  const consensus = debateData?.consensus || { verdict: 'Caution', confidence: 0.5, reasoning: 'Awaiting analysis.', conditions: [] };
+  const verdictColor = consensus.verdict === 'Proceed' ? 'text-emerald-400' : consensus.verdict === 'Reject' ? 'text-rose-400' : 'text-amber-400';
+  const verdictGlow = consensus.verdict === 'Proceed' ? 'rgba(16, 185, 129, 0.4)' : consensus.verdict === 'Reject' ? 'rgba(244, 63, 94, 0.4)' : 'rgba(245, 158, 11, 0.4)';
+
+  // Split advocate/skeptic text into lines for phased reveal
+  const advocateLines = advocateText.split(/\n+/).filter((l: string) => l.trim());
+  const skepticLines = skepticText.split(/\n+/).filter((l: string) => l.trim());
+
   return (
     <div className="fixed inset-0 z-[100] bg-[#000000] text-zinc-100 flex flex-col overflow-hidden font-sans">
       <style>{`
         @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-10px); } }
         @keyframes speak-ring { 0% { transform: scale(0.8); opacity: 0.8; } 100% { transform: scale(1.5); opacity: 0; } }
         @keyframes strike { 0% { transform: rotate(0deg); } 15% { transform: rotate(-30deg); } 25% { transform: rotate(45deg); } 30% { transform: rotate(35deg); } 35% { transform: rotate(45deg); } 100% { transform: rotate(45deg); } }
-        @keyframes shockwave { 0% { transform: scale(0.9); opacity: 0; box-shadow: 0 0 0 0 rgba(255,255,255,0); } 25% { transform: scale(1); opacity: 1; box-shadow: 0 0 100px 20px rgba(16, 185, 129, 0.4); } 100% { transform: scale(2); opacity: 0; box-shadow: 0 0 200px 50px rgba(16, 185, 129, 0); } }
+        @keyframes shockwave { 0% { transform: scale(0.9); opacity: 0; box-shadow: 0 0 0 0 rgba(255,255,255,0); } 25% { transform: scale(1); opacity: 1; box-shadow: 0 0 100px 20px ${verdictGlow}; } 100% { transform: scale(2); opacity: 0; box-shadow: 0 0 200px 50px ${verdictGlow.replace('0.4', '0')}; } }
         .animate-float { animation: float 4s ease-in-out infinite; }
         .animate-speak::after { content: ''; position: absolute; inset: -20px; border-radius: 50%; border: 2px solid currentColor; animation: speak-ring 1.5s ease-out infinite; }
         .gavel-strike { transform-origin: 80% 80%; animation: strike 1s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
         .gavel-rest { transform: rotate(0deg); transform-origin: 80% 80%; }
         .impact-wave { animation: shockwave 2s cubic-bezier(0.1, 0.8, 0.3, 1) forwards; }
       `}</style>
-      <header className="flex justify-between items-center p-6 border-b border-zinc-800 bg-[#09090b]">
+      <header className="flex justify-between items-center p-4 sm:p-6 border-b border-zinc-800 bg-[#09090b]">
         <div className="flex items-center gap-3">
           <Activity className="w-5 h-5 text-cyan-500" />
-          <h2 className="text-lg font-medium tracking-wide">Multi-Agent Efficacy Analysis</h2>
-          <span className="px-2 py-0.5 bg-zinc-800 text-zinc-400 text-xs rounded uppercase tracking-widest ml-4">Live Debate</span>
+          <h2 className="text-base sm:text-lg font-medium tracking-wide">Multi-Agent Adversarial Debate</h2>
+          <span className="px-2 py-0.5 bg-zinc-800 text-zinc-400 text-xs rounded uppercase tracking-widest ml-2 sm:ml-4">{debateData ? 'Real Analysis' : 'Live Debate'}</span>
         </div>
         <button onClick={onClose} className="p-2 hover:bg-zinc-800 rounded-full transition-colors"><X className="w-5 h-5 text-zinc-400" /></button>
       </header>
-      <div className="flex-1 flex relative">
+      <div className="flex-1 flex flex-col md:flex-row relative">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-900 via-[#050505] to-[#000000]"></div>
-        <div className="flex-1 flex flex-col items-center justify-center p-8 relative z-10 border-r border-zinc-800/50">
-          <div className={`relative w-32 h-32 rounded-full bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-500 animate-float ${phase === 1 || phase === 3 ? 'animate-speak' : ''}`}>
-            <Bot className="w-12 h-12" />
+        {/* Advocate */}
+        <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-8 relative z-10 border-b md:border-b-0 md:border-r border-zinc-800/50">
+          <div className={`relative w-20 h-20 sm:w-32 sm:h-32 rounded-full bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-500 animate-float ${phase === 1 || phase === 3 ? 'animate-speak' : ''}`}>
+            <Bot className="w-8 h-8 sm:w-12 sm:h-12" />
           </div>
-          <h3 className="mt-8 text-lg font-medium text-blue-400">Proponent Agent</h3>
-          <p className="text-zinc-500 text-sm uppercase tracking-wider mt-1">Optimization: Efficacy</p>
-          <div className="mt-8 w-full max-w-sm bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-xl p-5 h-48 overflow-hidden relative">
-            <div className="absolute top-0 left-0 w-full h-8 bg-gradient-to-b from-[#000000] to-transparent z-10"></div>
-            <div className="space-y-3 text-sm text-zinc-400">
-              <p className="opacity-40">Initializing efficacy models...</p>
-              {phase >= 1 && <p className="text-blue-200">Analyzing AMPK activation pathways.</p>}
-              {phase >= 1 && <p className="text-blue-200">Strong binding affinity detected at primary sites.</p>}
-              {phase >= 3 && <p className="text-blue-200">Therapeutic window supports high viability score (7.0/10).</p>}
+          <h3 className="mt-4 sm:mt-8 text-lg font-medium text-blue-400">Advocate Agent</h3>
+          <p className="text-zinc-500 text-xs sm:text-sm uppercase tracking-wider mt-1">Optimization: Efficacy</p>
+          <div className="mt-4 sm:mt-8 w-full max-w-sm bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-xl p-4 sm:p-5 min-h-[120px] sm:h-56 overflow-y-auto relative">
+            <div className="space-y-2.5 text-sm text-zinc-400">
+              {phase < 1 && <p className="opacity-40">Initializing efficacy models...</p>}
+              {phase >= 1 && advocateLines.length > 0 ? (
+                advocateLines.map((line: string, i: number) => (
+                  <p key={i} className="text-blue-200 leading-relaxed text-xs sm:text-sm">{line}</p>
+                ))
+              ) : phase >= 1 ? (
+                <>
+                  <p className="text-blue-200">Strong clinical evidence supports repurposing potential.</p>
+                  <p className="text-blue-200">Multiple phase-active trials indicate regulatory interest.</p>
+                </>
+              ) : null}
             </div>
-            <div className="absolute bottom-0 left-0 w-full h-8 bg-gradient-to-t from-[#121214] to-transparent z-10"></div>
           </div>
         </div>
-        <div className="w-[400px] flex flex-col items-center justify-end pb-24 relative z-10">
+        {/* Consensus */}
+        <div className="hidden md:flex w-[400px] flex-col items-center justify-end pb-24 relative z-10">
           <div className="absolute top-20 flex flex-col items-center">
             <Scale className="w-12 h-12 text-zinc-600 mb-4" />
             <div className="text-xl font-light text-zinc-300">Consensus Engine</div>
@@ -144,34 +169,58 @@ const DebateSimulation = ({ onClose }: { onClose: () => void }) => {
             </svg>
             <div className="w-40 h-12 bg-[#0a0a0a] border-t-2 border-zinc-700 rounded-t-xl absolute bottom-0 shadow-2xl flex items-center justify-center">
               <div className="w-32 h-2 bg-zinc-800 rounded-full overflow-hidden">
-                <div className="h-full bg-emerald-500 w-[70%] transition-all duration-1000"></div>
+                <div className="h-full bg-emerald-500 transition-all duration-1000" style={{ width: `${(consensus.confidence || 0.5) * 100}%` }}></div>
               </div>
             </div>
           </div>
           {phase >= 4 && (
-            <div className="mt-8 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="text-2xl font-medium text-emerald-400">Action Approved</div>
-              <div className="text-zinc-500 text-sm mt-2">Viability exceeds threshold.</div>
+            <div className="mt-8 text-center animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-xs">
+              <div className={`text-2xl font-medium ${verdictColor}`}>{consensus.verdict || 'Caution'}</div>
+              <div className="text-zinc-400 text-sm mt-2">{consensus.reasoning || 'Viability analysis complete.'}</div>
+              {consensus.conditions?.length > 0 && (
+                <div className="mt-3 space-y-1">
+                  {consensus.conditions.map((c: string, i: number) => (
+                    <div key={i} className="text-xs text-zinc-500 flex items-center gap-1.5">
+                      <span className="w-1 h-1 rounded-full bg-zinc-600" /> {c}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="mt-3 text-xs text-zinc-600">Confidence: {((consensus.confidence || 0.5) * 100).toFixed(0)}%</div>
             </div>
           )}
         </div>
-        <div className="flex-1 flex flex-col items-center justify-center p-8 relative z-10 border-l border-zinc-800/50">
-          <div className={`relative w-32 h-32 rounded-full bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-500 animate-float ${phase === 2 ? 'animate-speak' : ''}`} style={{ animationDelay: '1s' }}>
-            <ShieldAlert className="w-12 h-12" />
+        {/* Skeptic */}
+        <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-8 relative z-10 border-t md:border-t-0 md:border-l border-zinc-800/50">
+          <div className={`relative w-20 h-20 sm:w-32 sm:h-32 rounded-full bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-500 animate-float ${phase === 2 ? 'animate-speak' : ''}`} style={{ animationDelay: '1s' }}>
+            <ShieldAlert className="w-8 h-8 sm:w-12 sm:h-12" />
           </div>
-          <h3 className="mt-8 text-lg font-medium text-rose-400">Skeptic Agent</h3>
-          <p className="text-zinc-500 text-sm uppercase tracking-wider mt-1">Optimization: Safety</p>
-          <div className="mt-8 w-full max-w-sm bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-xl p-5 h-48 overflow-hidden relative">
-            <div className="absolute top-0 left-0 w-full h-8 bg-gradient-to-b from-[#121214] to-transparent z-10"></div>
-            <div className="space-y-3 text-sm text-zinc-400">
-              <p className="opacity-40">Scanning for off-target effects...</p>
-              {phase >= 2 && <p className="text-rose-200">Mitochondrial complex I inhibition identified.</p>}
-              {phase >= 2 && <p className="text-rose-200">Flagging potential toxicity risk (3.8/10).</p>}
-              {phase >= 4 && <p className="opacity-50 line-through">Requesting developmental halt.</p>}
+          <h3 className="mt-4 sm:mt-8 text-lg font-medium text-rose-400">Skeptic Agent</h3>
+          <p className="text-zinc-500 text-xs sm:text-sm uppercase tracking-wider mt-1">Optimization: Safety</p>
+          <div className="mt-4 sm:mt-8 w-full max-w-sm bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-xl p-4 sm:p-5 min-h-[120px] sm:h-56 overflow-y-auto relative">
+            <div className="space-y-2.5 text-sm text-zinc-400">
+              {phase < 2 && <p className="opacity-40">Scanning for off-target effects...</p>}
+              {phase >= 2 && skepticLines.length > 0 ? (
+                skepticLines.map((line: string, i: number) => (
+                  <p key={i} className="text-rose-200 leading-relaxed text-xs sm:text-sm">{line}</p>
+                ))
+              ) : phase >= 2 ? (
+                <>
+                  <p className="text-rose-200">Safety concerns require further investigation.</p>
+                  <p className="text-rose-200">Patent landscape may limit freedom to operate.</p>
+                </>
+              ) : null}
             </div>
-            <div className="absolute bottom-0 left-0 w-full h-8 bg-gradient-to-t from-[#121214] to-transparent z-10"></div>
           </div>
         </div>
+        {/* Mobile consensus */}
+        {phase >= 4 && (
+          <div className="md:hidden flex flex-col items-center py-6 relative z-10 border-t border-zinc-800/50">
+            <div className={`text-xl font-medium ${verdictColor}`}>{consensus.verdict || 'Caution'}</div>
+            <div className="text-zinc-400 text-xs mt-2 text-center px-6">{consensus.reasoning || 'Analysis complete.'}</div>
+            <div className="mt-2 text-xs text-zinc-600">Confidence: {((consensus.confidence || 0.5) * 100).toFixed(0)}%</div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -986,6 +1035,75 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
         opportunities: report?.ai_analysis?.top_opportunities || [],
         risks: report?.ai_analysis?.top_risks || []
       }} />
+
+      {/* Regulatory Pathway Recommender */}
+      <div className="mt-8">
+        <RegulatoryPathway
+          molecule={report.molecule}
+          clinicalData={report.clinical_data}
+          regulatoryData={report.regulatory_data}
+          repurposingCandidates={report.repurposing_candidates}
+          phoenixScore={phoenixScore}
+          targetData={report.target_data}
+        />
+      </div>
+
+      {/* Risk-Benefit Radar */}
+      <div className="mt-8">
+        <RiskRadar
+          drugName={report.molecule}
+          clinicalScore={report.phoenix_breakdown?.clinical ?? (phoenixScore ? phoenixScore * 0.7 : 4)}
+          safetyScore={report.pubchem_data?.ld50 ? Math.min(10, 10 - (report.pubchem_data.ld50 > 500 ? 2 : 5)) : 6}
+          marketScore={report.phoenix_breakdown?.market ?? (phoenixScore ? phoenixScore * 0.3 : 3)}
+          ipScore={(report.patent_data || []).length === 0 ? 8 : Math.max(2, 10 - (report.patent_data || []).length)}
+          evidenceScore={Math.min(10, (report.literature_data || []).length * 0.5 + (report.clinical_data || []).length * 0.3)}
+          noveltyScore={report.pubchem_data?.mechanism_of_action ? 7 : 5}
+        />
+      </div>
+
+      {/* Interactive Knowledge Graph */}
+      <div className="mt-8">
+        <KnowledgeGraph
+          drugName={report.molecule}
+          data={{
+            targets: (Array.isArray(report.target_data?.targets) ? report.target_data.targets : Array.isArray(report.target_data) ? report.target_data : []).slice(0, 8).map((t: any) => ({
+              name: t.target || t.name || t.disease || t.approvedSymbol || 'Unknown',
+              score: t.score ?? t.associationScore ?? Math.random() * 0.8 + 0.2,
+            })),
+            diseases: (Array.isArray(report.target_data?.diseases) ? report.target_data.diseases : []).slice(0, 6).map((d: any) => ({
+              name: d.name || d.disease || 'Unknown',
+              score: d.score ?? 0.5,
+            })).concat(
+              (Array.isArray(report.repurposing_candidates) ? report.repurposing_candidates : []).slice(0, 10).map((c: any) => ({
+                name: c.condition || 'Unknown',
+                score: c.repurposing_score ? Number(c.repurposing_score) / 10 : 0.5,
+                phase: c.max_phase,
+              }))
+            ),
+            pathways: Array.isArray(report.target_data?.mechanisms)
+              ? report.target_data.mechanisms.map((m: any) => m.description || m).filter(Boolean)
+              : (report.pubchem_data?.pharmacological_classes
+                || report.pubchem_data?.drug_classes
+                || (report.pubchem_data?.mechanism_of_action ? [report.pubchem_data.mechanism_of_action] : [])),
+            trials: (Array.isArray(report.clinical_data) ? report.clinical_data : []).slice(0, 6).map((t: any) => ({
+              id: t.nct_id || t.nctId || `Trial-${Math.random().toString(36).slice(2, 7)}`,
+              phase: t.phase,
+            })),
+          }}
+        />
+      </div>
+
+      {/* AI Evidence Chain */}
+      <AIEvidenceChain
+        molecule={report.molecule}
+        clinicalData={Array.isArray(report.clinical_data) ? report.clinical_data : []}
+        literatureData={Array.isArray(report.literature_data) ? report.literature_data : []}
+        regulatoryData={report.regulatory_data}
+        pubchemData={report.pubchem_data}
+        patentData={Array.isArray(report.patent_data) ? report.patent_data : []}
+        phoenixScore={phoenixScore ?? undefined}
+        repurposingCandidates={Array.isArray(report.repurposing_candidates) ? report.repurposing_candidates : []}
+      />
     </div>
   );
 };
@@ -1071,6 +1189,8 @@ const ClinicalAndIPTab = ({ report }: any) => (
 
 const ScienceTab = ({ report, setActiveSidebar }: any) => {
   const pd = report.pubchem_data || {};
+  const td = report.target_data || {};
+  const faersReactions = report.regulatory_data?.faers_reactions || [];
   const ro5 = (pd.molecular_weight != null && pd.xlogp != null && pd.hbd != null && pd.hba != null)
     ? (parseFloat(pd.molecular_weight) <= 500 && parseFloat(String(pd.xlogp)) <= 5 && pd.hbd <= 5 && pd.hba <= 10 ? 'Pass' : 'Fail')
     : null;
@@ -1084,11 +1204,139 @@ const ScienceTab = ({ report, setActiveSidebar }: any) => {
         elimination: pd.excretion || pd.clearance || 'Unknown',
         halfLife: pd.half_life || 'Unknown'
       }} />
+
+      {/* Open Targets — Real Biological Targets & Disease Associations */}
+      {(td.targets?.length > 0 || td.mechanisms?.length > 0) && (
+        <div className="mb-10">
+          <h3 className="text-xl font-medium text-zinc-100 mb-6 flex items-center gap-2">
+            <Target className="w-5 h-5 text-cyan-400" /> Biological Targets & Disease Associations
+            <SourceBadge api="Open Targets" endpoint="api.platform.opentargets.org/api/v4/graphql" url="https://platform.opentargets.org" confidence="High" note={`Drug: ${td.chemblId || 'Unknown'} — ${td.targetsFound || 0} targets, ${td.diseasesFound || 0} diseases`} />
+          </h3>
+
+          {/* Mechanisms of Action */}
+          {td.mechanisms?.length > 0 && (
+            <div className="mb-6">
+              <h4 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider mb-3">Mechanisms of Action</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {td.mechanisms.map((m: any, i: number) => (
+                  <div key={i} className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4 hover:bg-zinc-900/60 transition-colors">
+                    <div className="text-sm text-zinc-200 font-medium mb-1">{m.description}</div>
+                    <div className="flex items-center gap-2 text-xs text-zinc-500">
+                      {m.targetSymbol && <Badge variant="outline" className="text-[10px] border-cyan-800/50 text-cyan-400 bg-cyan-500/5">{m.targetSymbol}</Badge>}
+                      {m.actionType && <span>{m.actionType}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Linked Targets */}
+            {td.targets?.length > 0 && (
+              <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-5">
+                <h4 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Network className="w-4 h-4 text-cyan-400" /> Linked Targets ({td.targetsFound || td.targets.length})
+                </h4>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {td.targets.slice(0, 10).map((t: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between py-1.5 border-b border-zinc-800/30 last:border-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded">{t.symbol}</span>
+                        <span className="text-sm text-zinc-300 truncate max-w-[200px]">{t.name}</span>
+                      </div>
+                      <a href={`https://platform.opentargets.org/target/${t.id}`} target="_blank" rel="noopener noreferrer" className="text-zinc-500 hover:text-cyan-400 transition-colors">
+                        <ExternalLink size={12} />
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Linked Diseases */}
+            {td.diseases?.length > 0 && (
+              <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-5">
+                <h4 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-rose-400" /> Linked Diseases ({td.diseasesFound || td.diseases.length})
+                </h4>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {td.diseases.slice(0, 15).map((d: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between py-1.5 border-b border-zinc-800/30 last:border-0">
+                      <span className="text-sm text-zinc-300 truncate max-w-[240px]">{d.name}</span>
+                      <a href={`https://platform.opentargets.org/disease/${d.id}`} target="_blank" rel="noopener noreferrer" className="text-zinc-500 hover:text-cyan-400 transition-colors">
+                        <ExternalLink size={12} />
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {td.hasBeenWithdrawn && (
+            <div className="mt-4 bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+              <div>
+                <span className="text-sm font-medium text-rose-300">Withdrawn Drug</span>
+                {td.withdrawnNotice && (
+                  <p className="text-xs text-rose-400/70 mt-1">
+                    Year: {td.withdrawnNotice.year} — {td.withdrawnNotice.reasons?.map((r: any) => r.reason).join(', ')}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <SafetyToxicitySection data={{
         toxicitySummary: pd.tox_summary || report.regulatory_data?.warnings || 'No explicit toxicity data available.',
         riskIndicators: [pd.ld50_text || 'LD50 unknown'],
         alerts: report.regulatory_data?.warnings ? [report.regulatory_data.warnings] : ['No specific boxed warnings recorded']
       }} />
+
+      {/* FAERS Safety Heatmap */}
+      {faersReactions.length > 0 && (
+        <div className="mb-10">
+          <h3 className="text-xl font-medium text-zinc-100 mb-6 flex items-center gap-2">
+            <ShieldAlert className="w-5 h-5 text-rose-400" /> Real-World Safety Signal — FAERS
+            <SourceBadge api="openFDA" endpoint="api.fda.gov/drug/event.json?count=patient.reaction" url="https://open.fda.gov" confidence="High" note="FDA Adverse Event Reporting System (FAERS) real-time data" />
+          </h3>
+          <SafetyHeatmap reactions={faersReactions} />
+        </div>
+      )}
+      {/* Indication Matrix — Clinical Trial Landscape */}
+      {(report.clinical_data || []).length > 0 && (
+        <div className="mb-10">
+          <h3 className="text-xl font-medium text-zinc-100 mb-6 flex items-center gap-2">
+            <Activity className="w-5 h-5 text-cyan-400" /> Clinical Trial Landscape
+            <SourceBadge api="ClinicalTrials.gov" endpoint="clinicaltrials.gov/api/v2/studies" url="https://clinicaltrials.gov" confidence="High" note="Bubble size = trial count, color = phase advancement" />
+          </h3>
+          <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4 overflow-hidden">
+            <IndicationMatrix clinicalData={report.clinical_data} />
+          </div>
+        </div>
+      )}
+
+      {/* KOL Network — Co-authorship Graph */}
+      {(report.literature_data || []).length > 0 && (
+        <div className="mb-10">
+          <h3 className="text-xl font-medium text-zinc-100 mb-6 flex items-center gap-2">
+            <Network className="w-5 h-5 text-cyan-400" /> Key Opinion Leader Network
+            <SourceBadge api="PubMed" endpoint="eutils.ncbi.nlm.nih.gov/entrez/eutils" url="https://pubmed.ncbi.nlm.nih.gov" confidence="High" note="Co-authorship force-directed graph from PubMed literature" />
+          </h3>
+          <KOLNetwork literatureData={report.literature_data} />
+        </div>
+      )}
+
+      {/* Top Investigators */}
+      {(report.literature_data || []).length > 0 && (
+        <div className="mb-10">
+          <TopInvestigators literatureData={report.literature_data} />
+        </div>
+      )}
+
       <h3 className="text-xl font-medium text-zinc-100 mb-6 flex items-center gap-2 mt-10">
         <Atom className="w-5 h-5 text-cyan-400" /> Physicochemical Descriptors
         <SourceBadge api="PubChem" endpoint="/compound/name/{mol}/property/MolecularWeight,XLogP,HBondDonorCount,HBondAcceptorCount,Complexity,DefinedAtomStereoCount/JSON" url="https://pubchem.ncbi.nlm.nih.gov" confidence="High" note="Computed properties from PubChem REST PUG API" />
@@ -1201,6 +1449,7 @@ export default function ReportPage() {
   const [showSimulation, setShowSimulation] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [shareState, setShareState] = useState<'idle' | 'loading' | 'copied'>('idle');
   const [currency, setCurrency] = useState<'USD' | 'INR'>('INR');
   const [structureMode, setStructureMode] = useState<'2d' | '3d'>('2d');
   const [activeSidebar, setActiveSidebar] = useState<'ai' | 'refs' | null>(null);
@@ -1447,7 +1696,7 @@ export default function ReportPage() {
     <ErrorBoundary>
       <div className="min-h-screen bg-[#000000] text-zinc-100 font-sans selection:bg-zinc-800 flex flex-col relative overflow-x-hidden transition-all duration-300">
         <div className="fixed inset-0 bg-[linear-gradient(rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.025)_1px,transparent_1px)] bg-[size:64px_64px] pointer-events-none [mask-image:radial-gradient(ellipse_90%_60%_at_50%_0%,#000_20%,transparent_100%)]"></div>
-        {showSimulation && <DebateSimulation onClose={() => setShowSimulation(false)} />}
+        {showSimulation && <DebateSimulation onClose={() => setShowSimulation(false)} debateData={report?.debate_data} />}
 
         <div className="flex-1 flex flex-col transition-all duration-300 overflow-y-auto h-screen relative"
           style={{ marginRight: activeSidebar !== null ? sidebarWidth : 0 }}>
@@ -1484,6 +1733,27 @@ export default function ReportPage() {
                   </svg>
                 </div>
                 <span>Ask</span>
+              </button>
+              <button
+                onClick={async () => {
+                  if (!id || shareState !== 'idle') return;
+                  setShareState('loading');
+                  try {
+                    const res = await fetch(`/api/reports/${id}/share`, { method: 'POST' });
+                    const data = await res.json();
+                    if (data.shareToken) {
+                      const url = `${window.location.origin}/shared/${data.shareToken}`;
+                      await navigator.clipboard.writeText(url);
+                      setShareState('copied');
+                      setTimeout(() => setShareState('idle'), 2500);
+                    }
+                  } catch { setShareState('idle'); }
+                }}
+                className="flex items-center gap-2 px-3.5 py-2 hover:bg-white/20 text-white rounded-full transition-colors border border-zinc-700 text-sm font-medium">
+                {shareState === 'loading' ? <Loader2 size={14} className="animate-spin" />
+                  : shareState === 'copied' ? <Check size={14} className="text-emerald-400" />
+                  : <Share2 size={14} />}
+                <span>{shareState === 'copied' ? 'Link Copied!' : 'Share'}</span>
               </button>
               <button onClick={handleExportPdf} disabled={isExportingPdf}
                 className="flex items-center gap-2 px-3.5 py-2 bg-zinc-100 hover:bg-white text-zinc-900 rounded-lg transition-colors disabled:opacity-50 border-none text-sm font-medium">
@@ -1591,13 +1861,17 @@ export default function ReportPage() {
                       Not sure what to ask? Try one of these:
                     </p>
                     <div className="absolute right-6 bottom-[140px] flex flex-col gap-3 items-end w-full">
-                      <button onClick={(e) => handleRagSubmit(e as any, "Summarize the report")} disabled={ragLoading}
+                      <button onClick={(e) => handleRagSubmit(e as any, "What makes this a good repurposing candidate?")} disabled={ragLoading}
                               className="text-sm font-medium text-zinc-200 border border-zinc-700 hover:bg-zinc-800/50 rounded-full px-5 py-2 transition-all w-fit disabled:opacity-50">
-                        Summarize the report
+                        What makes this a good repurposing candidate?
                       </button>
-                      <button onClick={(e) => handleRagSubmit(e as any, "Recommend related content")} disabled={ragLoading}
+                      <button onClick={(e) => handleRagSubmit(e as any, "What are the main safety concerns?")} disabled={ragLoading}
                               className="text-sm font-medium text-zinc-200 border border-zinc-700 hover:bg-zinc-800/50 rounded-full px-5 py-2 transition-all w-fit disabled:opacity-50">
-                        Recommend related content
+                        What are the main safety concerns?
+                      </button>
+                      <button onClick={(e) => handleRagSubmit(e as any, "Explain the Phoenix Score breakdown")} disabled={ragLoading}
+                              className="text-sm font-medium text-zinc-200 border border-zinc-700 hover:bg-zinc-800/50 rounded-full px-5 py-2 transition-all w-fit disabled:opacity-50">
+                        Explain the Phoenix Score breakdown
                       </button>
                     </div>
                   </div>

@@ -4,11 +4,14 @@ import {
   Search, Activity, FileText, Sparkles, BrainCircuit, Send,
   ChevronRight, ArrowRight, CheckCircle, Database, FlaskConical,
   TrendingUp, Shield, Microscope, Network, Bot, Gavel,
-  BookOpen, TestTube, BarChart3, Check, Zap,
+  BookOpen, TestTube, BarChart3, Check, Zap, Menu, X,
 } from 'lucide-react';
 import { motion, AnimatePresence, useScroll, useTransform, MotionValue } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import { ShaderButton } from '@/components/ui/ShaderButton';
+import { useRazorpay } from "react-razorpay";
+import { TypewriterHero } from '@/components/TypewriterHero';
+import { AnimatedCounter } from '@/components/AnimatedCounter';
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -125,10 +128,10 @@ const REPORT_TABS = [
 ];
 
 const STATS = [
-  { value: '8',        label: 'AI Agents'    },
-  { value: '8+',       label: 'Data Sources' },
-  { value: 'Real-time',label: 'Analysis'     },
-  { value: '360°',     label: 'Coverage'     },
+  { value: 500000,  suffix: '+', label: 'Molecules Indexed' },
+  { value: 8,       suffix: '',  label: 'AI Agents' },
+  { value: 2.5,     suffix: 'M+', label: 'Clinical Trials', decimals: 1 },
+  { value: 360,     suffix: '°',  label: 'Coverage' },
 ];
 
 const PRICING_PLANS = [
@@ -200,32 +203,31 @@ function FeatureCard({ icon, title, description }: { icon: React.ReactNode; titl
   );
 }
 
-const HERO_OFFSETS = [
-  // 0: Left Top → tilt RIGHT
+const HERO_OFFSETS_DESKTOP = [
   { x: "-25.8vw", y: "-110vh", rotate: 10 },
-
-  // 1: Right Top → tilt LEFT
   { x: "25vw", y: "-113vh", rotate: -10 },
-
-  // 2: Left Bottom → tilt RIGHT
   { x: "-20vw", y: "-90vh", rotate: -6 },
-
-  // 3: Right Bottom → tilt LEFT
   { x: "25vw", y: "-90vh", rotate: 8 },
 ];
 
+const HERO_OFFSETS_MOBILE = [
+  { x: "0vw", y: "-20vh", rotate: 3 },
+  { x: "0vw", y: "-20vh", rotate: -3 },
+  { x: "0vw", y: "-20vh", rotate: -2 },
+  { x: "0vw", y: "-20vh", rotate: 2 },
+];
+
 function AnimatedFeatureCard({ scrollYProgress, index, feature }: { scrollYProgress: MotionValue<number>; index: number; feature: typeof FEATURES[0] }) {
-  const init = HERO_OFFSETS[index];
-  
-  // They start from 'init' when the section is at the bottom of the viewport
-  // and converge to 0 when it reaches the middle
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  const init = isMobile ? HERO_OFFSETS_MOBILE[index] : HERO_OFFSETS_DESKTOP[index];
+
   const x = useTransform(scrollYProgress, [0, 0.8], [init.x, "0vw"]);
   const y = useTransform(scrollYProgress, [0, 0.8], [init.y, "0vh"]);
   const rotate = useTransform(scrollYProgress, [0, 0.8], [init.rotate, 0]);
-  const scale = useTransform(scrollYProgress, [0, 0.8], [0.82, 1]);
+  const scale = useTransform(scrollYProgress, [0, 0.8], [isMobile ? 0.95 : 0.82, 1]);
 
   return (
-    <motion.div style={{ x, y, rotate, scale }} className="h-full z-10 w-[420px] max-w-full mx-auto pointer-events-none md:pointer-events-auto">
+    <motion.div style={{ x, y, rotate, scale }} className="h-full z-10 w-full md:w-[420px] max-w-full mx-auto pointer-events-none md:pointer-events-auto">
       <motion.div
         animate={{ y: [0, feature.floatY, 0] }}
         transition={{ duration: feature.floatD, repeat: Infinity, ease: 'easeInOut', delay: index * 0.9 }}
@@ -242,6 +244,8 @@ export default function LandingPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [isNavigating, setIsNavigating] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { Razorpay } = useRazorpay();
   const featuresRef = React.useRef<HTMLElement>(null);
   
   const { scrollYProgress } = useScroll({
@@ -255,24 +259,71 @@ export default function LandingPage() {
     setTimeout(() => navigate('/search'), 1500);
   };
 
+  const handleSubscriptionPay = React.useCallback(async (planName: string, amountStr: string) => {
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+    
+    if (planName === "Explorer" || planName === "Enterprise") {
+        return;
+    }
+    
+    const amount = 9900; // in cents/paise
+    
+    const options: any = {
+      key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_SHFkFDv4q8dkSo', // Enter the Key ID generated from the Dashboard
+      amount: amount.toString(), // Amount is in currency subunits. Default currency is INR. Hence, 50000 refers to 50000 paise
+      currency: "USD",
+      name: "Phoenix Blueprint",
+      description: `${planName} Subscription`,
+      image: "https://example.com/your_logo",
+      handler: function (response: any) {
+         console.log(response.razorpay_payment_id);
+         console.log(response.razorpay_order_id);
+         console.log(response.razorpay_signature)
+      },
+      prefill: {
+        name: user.name || "User",
+        email: user.email || "user@example.com",
+        contact: "9999999999",
+      },
+      notes: {
+        address: "Phoenix Blueprint Corporate Office",
+      },
+      theme: {
+        color: "#3399cc",
+      },
+    };
+
+    const rzp1 = new Razorpay(options);
+
+    rzp1.on("payment.failed", function (response: any) {
+         alert(`Payment failed: ${response.error.description}`);
+    });
+
+    rzp1.open();
+
+  }, [Razorpay, user, navigate]);
+
   return (
     <main className="bg-[#f8fafc] dark:bg-[#000000] text-zinc-900 dark:text-[#ededed] font-sans selection:bg-zinc-200 dark:selection:bg-zinc-800 relative overflow-x-hidden">
       {/* Navbar */}
-      <header className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-50">
+      <header className="absolute top-0 left-0 right-0 px-4 py-4 sm:p-6 flex justify-between items-center z-50">
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate("/")}>
           <div className="w-8 h-8 rounded-lg bg-indigo-500 dark:bg-white flex items-center justify-center">
             <div className="w-3 h-3 bg-white dark:bg-black rounded-sm" />
           </div>
-          
         </div>
-        
-<nav className="hidden md:flex absolute left-1/2 -translate-x-1/2 items-center gap-6 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+
+        <nav className="hidden md:flex absolute left-1/2 -translate-x-1/2 items-center gap-6 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
           <button onClick={() => navigate("/")} className="hover:text-zinc-900 dark:hover:text-zinc-200">HOME</button>
           <button onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })} className="hover:text-zinc-900 dark:hover:text-zinc-200">FEATURES</button>
           <button onClick={() => document.getElementById("plans")?.scrollIntoView({ behavior: "smooth" })} className="hover:text-zinc-900 dark:hover:text-zinc-200">PLANS</button>
+          <button onClick={() => navigate("/compare")} className="hover:text-zinc-900 dark:hover:text-zinc-200 flex items-center gap-1">COMPARE</button>
         </nav>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
           {!user ? (
             <>
               <button 
@@ -296,8 +347,38 @@ export default function LandingPage() {
               DASHBOARD <ArrowRight className="w-3 h-3 -rotate-45" />
             </button>
           )}
+          {/* Mobile hamburger */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="md:hidden p-2 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white"
+            aria-label="Toggle menu"
+          >
+            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
         </div>
       </header>
+
+      {/* Mobile menu overlay */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-x-0 top-[60px] z-50 md:hidden bg-white/95 dark:bg-zinc-900/95 backdrop-blur-lg border-b border-zinc-200 dark:border-zinc-800 shadow-lg"
+          >
+            <nav className="flex flex-col items-center gap-1 py-4 px-6">
+              <button onClick={() => { navigate("/"); setMobileMenuOpen(false); }} className="w-full py-3 text-sm font-semibold text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white uppercase tracking-widest">HOME</button>
+              <button onClick={() => { document.getElementById("features")?.scrollIntoView({ behavior: "smooth" }); setMobileMenuOpen(false); }} className="w-full py-3 text-sm font-semibold text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white uppercase tracking-widest">FEATURES</button>
+              <button onClick={() => { document.getElementById("plans")?.scrollIntoView({ behavior: "smooth" }); setMobileMenuOpen(false); }} className="w-full py-3 text-sm font-semibold text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white uppercase tracking-widest">PLANS</button>
+              {!user && (
+                <button onClick={() => { navigate("/login"); setMobileMenuOpen(false); }} className="w-full py-3 text-sm font-semibold text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white uppercase tracking-widest sm:hidden">LOG IN</button>
+              )}
+            </nav>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
 
       {/* Fixed background grid */}
@@ -324,7 +405,7 @@ export default function LandingPage() {
           SECTION 1 — HERO
           Full viewport. Hero text sits above everything.
       ═══════════════════════════════════════════════════════════════════════ */}
-      <section className="relative h-screen min-h-[640px] overflow-hidden flex items-center justify-center z-10 pointer-events-none">
+      <section className="relative h-screen min-h-[560px] sm:min-h-[640px] overflow-hidden flex items-center justify-center z-10 pointer-events-none">
 
         {/* ── Hero text (z-20) ─────────────────────────────── */}
         <div className="relative z-20 flex flex-col items-center text-center px-6 pointer-events-auto">
@@ -339,15 +420,19 @@ export default function LandingPage() {
               NEXT-GEN DISCOVERY ENGINE
             </div>
 
-            <h1 className="text-5xl sm:text-6xl md:text-[84px] font-bold tracking-tighter leading-[1.05] mb-7">
-              <span className="text-zinc-900 dark:text-white">Autonomous</span>
+            <h1 className="text-3xl xs:text-4xl sm:text-5xl md:text-6xl lg:text-[84px] font-bold tracking-tighter leading-[1.05] mb-5 sm:mb-7">
+              <TypewriterHero
+                staticPrefix=""
+                words={['Autonomous', 'Intelligent', 'Real-time', 'Multi-Agent']}
+                className="text-zinc-900 dark:text-white"
+              />
               <br />
               <span className="text-transparent bg-clip-text bg-gradient-to-b from-blue-600 to-cyan-700 dark:from-zinc-200 dark:to-zinc-600">
                 Research Platform
               </span>
             </h1>
 
-            <p className="text-lg md:text-xl text-zinc-500 dark:text-zinc-400 max-w-xl text-center mb-10 font-light leading-relaxed">
+            <p className="text-base sm:text-lg md:text-xl text-zinc-500 dark:text-zinc-400 max-w-xl text-center mb-8 sm:mb-10 font-light leading-relaxed px-2">
               Analyze clinical trials, literature, and regulatory data in seconds using advanced multi-agent orchestrations.
             </p>
 
@@ -391,7 +476,7 @@ export default function LandingPage() {
       <section
         id="features"
         ref={featuresRef}
-        className="relative min-h-screen flex flex-col items-center justify-center px-6 py-24 border-t border-zinc-100 dark:border-zinc-800/40 z-0"
+        className="relative min-h-screen flex flex-col items-center justify-center px-4 sm:px-6 py-16 sm:py-24 border-t border-zinc-100 dark:border-zinc-800/40 z-0"
       >
         {/* Section heading animates up from below */}
         <motion.div
@@ -401,7 +486,7 @@ export default function LandingPage() {
           viewport={{ once: true, amount: 0.3 }}
           className="text-center mb-16"
         >
-          <h2 className="text-3xl md:text-5xl font-bold text-zinc-900 dark:text-white tracking-tight">
+          <h2 className="text-2xl sm:text-3xl md:text-5xl font-bold text-zinc-900 dark:text-white tracking-tight">
             Unified Intelligence
           </h2>
           <p className="text-zinc-500 dark:text-zinc-400 mt-4 text-lg font-light max-w-xl mx-auto">
@@ -418,37 +503,34 @@ export default function LandingPage() {
       </section>
 
       {/* ─── STATS BAR ────────────────────────────────────────────────────── */}
-      <section className="relative z-10 py-10 border-y border-zinc-200 dark:border-zinc-800/60 bg-white/60 dark:bg-zinc-900/20 backdrop-blur-sm">
-        <div className="max-w-5xl mx-auto px-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+      <section className="relative z-10 py-8 sm:py-10 border-y border-zinc-200 dark:border-zinc-800/60 bg-white/60 dark:bg-zinc-900/20 backdrop-blur-sm">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-8">
             {STATS.map((s, i) => (
-              <motion.div
+              <AnimatedCounter
                 key={i}
-                initial={{ opacity: 0, y: 16 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.45, delay: i * 0.08 }}
-                viewport={{ once: true }}
-                className="flex flex-col items-center text-center"
-              >
-                <span className="text-3xl md:text-4xl font-bold text-zinc-900 dark:text-white tracking-tight">{s.value}</span>
-                <span className="text-xs text-zinc-400 dark:text-zinc-500 mt-1.5 uppercase tracking-widest font-medium">{s.label}</span>
-              </motion.div>
+                target={s.value}
+                suffix={s.suffix}
+                label={s.label}
+                duration={2.5}
+                decimals={(s as any).decimals || 0}
+              />
             ))}
           </div>
         </div>
       </section>
 
       {/* ─── HOW IT WORKS ─────────────────────────────────────────────────── */}
-      <section id="how-it-works" className="py-32 px-6 relative z-10">
+      <section id="how-it-works" className="py-16 sm:py-24 md:py-32 px-4 sm:px-6 relative z-10">
         <div className="max-w-5xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 40 }}
             whileInView={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7 }}
             viewport={{ once: true }}
-            className="text-center mb-20"
+            className="text-center mb-12 sm:mb-20"
           >
-            <h2 className="text-3xl md:text-5xl font-bold text-zinc-900 dark:text-white tracking-tight mb-4">
+            <h2 className="text-2xl sm:text-3xl md:text-5xl font-bold text-zinc-900 dark:text-white tracking-tight mb-4">
               How It Works
             </h2>
             <p className="text-zinc-500 dark:text-zinc-400 text-lg max-w-xl mx-auto font-light">
@@ -457,8 +539,11 @@ export default function LandingPage() {
           </motion.div>
 
           <div className="relative">
+            {/* Horizontal connector line — desktop only */}
             <div className="hidden md:block absolute top-8 left-[calc(10%+32px)] right-[calc(10%+32px)] h-px bg-gradient-to-r from-transparent via-zinc-200 dark:via-zinc-800 to-transparent" />
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-6 md:gap-4">
+            {/* Vertical connector line — mobile only */}
+            <div className="md:hidden absolute left-1/2 -translate-x-px top-16 bottom-16 w-px bg-gradient-to-b from-transparent via-zinc-200 dark:via-zinc-800 to-transparent" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-8 sm:gap-6 md:gap-4">
               {STEPS.map((s, i) => (
                 <motion.div
                   key={i}
@@ -468,11 +553,11 @@ export default function LandingPage() {
                   viewport={{ once: true }}
                   className="flex flex-col items-center text-center"
                 >
-                  <div className="w-16 h-16 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex items-center justify-center mb-5 relative z-10 shadow-sm">
-                    <span className="text-base font-bold text-zinc-800 dark:text-zinc-200 tracking-tight">{s.step}</span>
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex items-center justify-center mb-4 sm:mb-5 relative z-10 shadow-sm">
+                    <span className="text-sm sm:text-base font-bold text-zinc-800 dark:text-zinc-200 tracking-tight">{s.step}</span>
                   </div>
                   <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100 mb-2 leading-tight">{s.title}</h3>
-                  <p className="text-xs text-zinc-400 dark:text-zinc-500 leading-relaxed">{s.description}</p>
+                  <p className="text-xs text-zinc-400 dark:text-zinc-500 leading-relaxed max-w-[260px] sm:max-w-none">{s.description}</p>
                 </motion.div>
               ))}
             </div>
@@ -481,20 +566,20 @@ export default function LandingPage() {
       </section>
 
       {/* ─── 8 AI AGENTS ───────────────────────────────────────────────────── */}
-      <section className="py-32 px-6 relative z-10 border-t border-zinc-100 dark:border-zinc-800/40">
+      <section className="py-16 sm:py-24 md:py-32 px-4 sm:px-6 relative z-10 border-t border-zinc-100 dark:border-zinc-800/40">
         <div className="max-w-6xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 40 }}
             whileInView={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7 }}
             viewport={{ once: true }}
-            className="text-center mb-16"
+            className="text-center mb-10 sm:mb-16"
           >
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 text-xs font-medium mb-6">
               <Bot size={12} className="text-cyan-500" />
               MULTI-AGENT ARCHITECTURE
             </div>
-            <h2 className="text-3xl md:text-5xl font-bold text-zinc-900 dark:text-white tracking-tight">
+            <h2 className="text-2xl sm:text-3xl md:text-5xl font-bold text-zinc-900 dark:text-white tracking-tight">
               8 Specialized AI Agents
             </h2>
             <p className="text-zinc-500 dark:text-zinc-400 mt-4 text-lg font-light max-w-2xl mx-auto">
@@ -614,7 +699,7 @@ export default function LandingPage() {
       </section>
 
       {/* ─── DATA SOURCES ─────────────────────────────────────────────────── */}
-      <section className="py-32 px-6 relative z-10 border-t border-zinc-100 dark:border-zinc-800/40">
+      <section className="py-16 sm:py-24 md:py-32 px-4 sm:px-6 relative z-10 border-t border-zinc-100 dark:border-zinc-800/40">
         <div className="max-w-5xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 40 }}
@@ -627,7 +712,7 @@ export default function LandingPage() {
               <Database size={12} />
               REAL DATA ONLY
             </div>
-            <h2 className="text-3xl md:text-5xl font-bold text-zinc-900 dark:text-white tracking-tight">
+            <h2 className="text-2xl sm:text-3xl md:text-5xl font-bold text-zinc-900 dark:text-white tracking-tight">
               Powered by Real Data
             </h2>
             <p className="text-zinc-500 dark:text-zinc-400 mt-4 text-lg font-light max-w-xl mx-auto">
@@ -635,7 +720,7 @@ export default function LandingPage() {
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
             {DATA_SOURCES.map((ds, i) => (
               <motion.div
                 key={i}
@@ -643,10 +728,10 @@ export default function LandingPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: i * 0.07 }}
                 viewport={{ once: true }}
-                className="bg-white/70 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all duration-300 cursor-default"
+                className="bg-white/70 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 sm:p-5 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all duration-300 cursor-default"
               >
-                <div className={`text-base font-bold mb-1.5 ${ds.color}`}>{ds.name}</div>
-                <div className="text-sm text-zinc-600 dark:text-zinc-400 font-medium leading-relaxed">{ds.desc}</div>
+                <div className={`text-sm sm:text-base font-bold mb-1.5 ${ds.color}`}>{ds.name}</div>
+                <div className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 font-medium leading-relaxed">{ds.desc}</div>
               </motion.div>
             ))}
             <motion.div
@@ -663,7 +748,7 @@ export default function LandingPage() {
       </section>
 
       {/* ─── REPORT SECTIONS ──────────────────────────────────────────────── */}
-      <section className="py-32 px-6 relative z-10 border-t border-zinc-100 dark:border-zinc-800/40">
+      <section className="py-16 sm:py-24 md:py-32 px-4 sm:px-6 relative z-10 border-t border-zinc-100 dark:border-zinc-800/40">
         <div className="max-w-5xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 40 }}
@@ -672,7 +757,7 @@ export default function LandingPage() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <h2 className="text-3xl md:text-5xl font-bold text-zinc-900 dark:text-white tracking-tight">
+            <h2 className="text-2xl sm:text-3xl md:text-5xl font-bold text-zinc-900 dark:text-white tracking-tight">
               Comprehensive Reports
             </h2>
             <p className="text-zinc-500 dark:text-zinc-400 mt-4 text-lg font-light max-w-xl mx-auto">
@@ -680,7 +765,7 @@ export default function LandingPage() {
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             {REPORT_TABS.map((r, i) => (
               <motion.div
                 key={i}
@@ -702,7 +787,7 @@ export default function LandingPage() {
       </section>
 
       {/* ─── PRICING ──────────────────────────────────────────────────────── */}
-        <section id="plans" className="py-32 px-6 relative z-10 border-t border-zinc-100 dark:border-zinc-800/40 bg-zinc-50/50 dark:bg-zinc-900/10">
+        <section id="plans" className="py-16 sm:py-24 md:py-32 px-4 sm:px-6 relative z-10 border-t border-zinc-100 dark:border-zinc-800/40 bg-zinc-50/50 dark:bg-zinc-900/10">
         <div className="max-w-6xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 40 }}
@@ -715,7 +800,7 @@ export default function LandingPage() {
               <Zap size={12} className="text-amber-500" />
               SUBSCRIPTION PLANS
             </div>
-            <h2 className="text-3xl md:text-5xl font-bold text-zinc-900 dark:text-white tracking-tight">
+            <h2 className="text-2xl sm:text-3xl md:text-5xl font-bold text-zinc-900 dark:text-white tracking-tight">
               Flexible Plans for Every Scale
             </h2>
             <p className="text-zinc-500 dark:text-zinc-400 mt-4 text-lg font-light max-w-xl mx-auto">
@@ -723,7 +808,7 @@ export default function LandingPage() {
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 sm:gap-8 max-w-5xl mx-auto">
             {PRICING_PLANS.map((plan, i) => (
               <motion.div
                 key={i}
@@ -731,7 +816,7 @@ export default function LandingPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: i * 0.1 }}
                 viewport={{ once: true }}
-                className={`relative flex flex-col p-8 rounded-3xl transition-all duration-300 ${
+                className={`relative flex flex-col p-6 sm:p-8 rounded-3xl transition-all duration-300 ${
                   plan.highlight
                     ? 'bg-gradient-to-b from-slate-200/50 to-slate-100/50 dark:from-zinc-800/80 dark:to-zinc-900/50 border-2 border-slate-300 dark:border-zinc-600 shadow-xl shadow-slate-200/50 dark:shadow-zinc-900/50'
                     : 'bg-white/70 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
@@ -766,6 +851,8 @@ export default function LandingPage() {
                   onClick={() => {
                     if (plan.name === 'Enterprise') {
                       window.open('https://wa.me/916382957995', '_blank', 'noopener,noreferrer');
+                    } else if (plan.name === 'Researcher') {
+                        handleSubscriptionPay(plan.name, plan.price)
                     } else {
                       navigate(user ? '/search' : '/login');
                     }
@@ -785,7 +872,7 @@ export default function LandingPage() {
       </section>
 
       {/* ─── CTA ──────────────────────────────────────────────────────────── */}
-      <section className="py-32 px-6 relative z-10 border-t border-zinc-100 dark:border-zinc-800/40">
+      <section className="py-16 sm:py-24 md:py-32 px-4 sm:px-6 relative z-10 border-t border-zinc-100 dark:border-zinc-800/40">
         <motion.div
           initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -797,7 +884,7 @@ export default function LandingPage() {
             <CheckCircle size={12} className="text-emerald-500" />
             No setup required
           </div>
-          <h2 className="text-4xl md:text-6xl font-bold text-zinc-900 dark:text-white tracking-tight mb-6 leading-tight">
+          <h2 className="text-3xl sm:text-4xl md:text-6xl font-bold text-zinc-900 dark:text-white tracking-tight mb-6 leading-tight">
             Start your first<br />analysis today
           </h2>
           <p className="text-zinc-500 dark:text-zinc-400 text-lg font-light mb-10 max-w-lg mx-auto leading-relaxed">
@@ -810,7 +897,7 @@ export default function LandingPage() {
       </section>
 
       {/* ─── FOOTER ───────────────────────────────────────────────────────── */}
-      <footer className="border-t border-zinc-200 dark:border-zinc-800/40 py-10 px-6 relative z-10">
+      <footer className="border-t border-zinc-200 dark:border-zinc-800/40 py-8 sm:py-10 px-4 sm:px-6 relative z-10">
         <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300 tracking-tight">
             <Sparkles size={14} className="text-blue-500 dark:text-zinc-500" />
