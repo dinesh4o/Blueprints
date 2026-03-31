@@ -1,4 +1,4 @@
-import { Settings, LogOut, UserCircle } from "lucide-react"
+import { Settings, LogOut, UserCircle, Zap, FolderOpen } from "lucide-react"
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 
@@ -70,6 +70,14 @@ export function ModeToggle() {
                   <DropdownMenuItem onClick={() => navigate('/profile')} className="rounded-lg cursor-pointer">
                     <UserCircle className="mr-2 h-4 w-4" />
                     <span>Edit Profile</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate('/portfolio')} className="rounded-lg cursor-pointer">
+                    <FolderOpen className="mr-2 h-4 w-4" />
+                    <span>My Reports</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { navigate('/'); setTimeout(() => document.getElementById('plans')?.scrollIntoView({ behavior: 'smooth' }), 300); }} className="rounded-lg cursor-pointer">
+                    <Zap className="mr-2 h-4 w-4" />
+                    <span>Explore Plans</span>
                   </DropdownMenuItem>
                 </div>
                 <DropdownMenuSeparator className="bg-border/50" />

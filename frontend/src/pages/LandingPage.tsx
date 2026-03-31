@@ -12,6 +12,7 @@ import { ShaderButton } from '@/components/ui/ShaderButton';
 import { useRazorpay } from "react-razorpay";
 import { TypewriterHero } from '@/components/TypewriterHero';
 import { AnimatedCounter } from '@/components/AnimatedCounter';
+import { LiquidBackground } from '@/components/LiquidBackground';
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -151,7 +152,7 @@ const PRICING_PLANS = [
   },
   {
     name: 'Researcher',
-    price: '$99',
+    price: '₹499',
     period: 'per user/month',
     desc: 'Advanced intelligence for dedicated researchers and labs.',
     features: [
@@ -269,12 +270,12 @@ export default function LandingPage() {
         return;
     }
     
-    const amount = 9900; // in cents/paise
+    const amount = 49900; // ₹499 in paise
     
     const options: any = {
-      key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_SHFkFDv4q8dkSo', // Enter the Key ID generated from the Dashboard
-      amount: amount.toString(), // Amount is in currency subunits. Default currency is INR. Hence, 50000 refers to 50000 paise
-      currency: "USD",
+      key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_SHFkFDv4q8dkSo',
+      amount: amount.toString(),
+      currency: "INR",
       name: "Phoenix Blueprint",
       description: `${planName} Subscription`,
       image: "https://example.com/your_logo",
@@ -320,7 +321,6 @@ export default function LandingPage() {
           <button onClick={() => navigate("/")} className="hover:text-zinc-900 dark:hover:text-zinc-200">HOME</button>
           <button onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })} className="hover:text-zinc-900 dark:hover:text-zinc-200">FEATURES</button>
           <button onClick={() => document.getElementById("plans")?.scrollIntoView({ behavior: "smooth" })} className="hover:text-zinc-900 dark:hover:text-zinc-200">PLANS</button>
-          <button onClick={() => navigate("/compare")} className="hover:text-zinc-900 dark:hover:text-zinc-200 flex items-center gap-1">COMPARE</button>
         </nav>
 
         <div className="flex items-center gap-3 sm:gap-4">
@@ -406,6 +406,9 @@ export default function LandingPage() {
           Full viewport. Hero text sits above everything.
       ═══════════════════════════════════════════════════════════════════════ */}
       <section className="relative h-screen min-h-[560px] sm:min-h-[640px] overflow-hidden flex items-center justify-center z-10 pointer-events-none">
+
+        {/* Silver fluid physics background */}
+        <LiquidBackground />
 
         {/* ── Hero text (z-20) ─────────────────────────────── */}
         <div className="relative z-20 flex flex-col items-center text-center px-6 pointer-events-auto">

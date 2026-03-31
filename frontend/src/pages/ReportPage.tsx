@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   Database, ChevronRight, Search, Download, LayoutGrid, List, Activity, X, Play, Gavel, Bot, ShieldAlert, Scale,
   MessageCircle, ExternalLink, Atom, Box, CheckCircle, TrendingUp, Target, Pill, Zap, Clock, Droplets, GitCompare,
@@ -1437,10 +1437,275 @@ const MarketTab = ({ report, currency, formatMarketSize }: any) => (
   </div>
 );
 
+/* ─── Purpose-built comparison view ─── */
+const CompareView = ({ reportA, reportB, formatMarketSize }: { reportA: any; reportB: any; formatMarketSize: (v: number) => string }) => {
+  const scoreA = reportA.phoenix_score != null ? Number(reportA.phoenix_score) : null;
+  const scoreB = reportB.phoenix_score != null ? Number(reportB.phoenix_score) : null;
+  const viabA = reportA.viability_score != null ? Number(reportA.viability_score) : null;
+  const viabB = reportB.viability_score != null ? Number(reportB.viability_score) : null;
+  const pdA = reportA.pubchem_data || {};
+  const pdB = reportB.pubchem_data || {};
+
+  const winner = (a: number | null, b: number | null) =>
+    a != null && b != null ? (a > b ? 'A' : b > a ? 'B' : 'tie') : null;
+
+  const phoenixWinner = winner(scoreA, scoreB);
+  const viabWinner = winner(viabA, viabB);
+
+  const totalMarketA = (reportA.market_analysis || []).reduce((s: number, i: any) => s + (Number(i.market_size_usd_billion) || 0), 0);
+  const totalMarketB = (reportB.market_analysis || []).reduce((s: number, i: any) => s + (Number(i.market_size_usd_billion) || 0), 0);
+
+  const propRows = [
+    { label: 'Mol. Weight', a: pdA.molecular_weight ? Number(pdA.molecular_weight).toFixed(2) : '—', b: pdB.molecular_weight ? Number(pdB.molecular_weight).toFixed(2) : '—', unit: 'g/mol' },
+    { label: 'LogP', a: pdA.xlogp ?? '—', b: pdB.xlogp ?? '—', unit: '' },
+    { label: 'H-Donors', a: pdA.hbd ?? '—', b: pdB.hbd ?? '—', unit: '' },
+    { label: 'H-Acceptors', a: pdA.hba ?? '—', b: pdB.hba ?? '—', unit: '' },
+    { label: 'Rotatable Bonds', a: pdA.rotatable_bonds ?? '—', b: pdB.rotatable_bonds ?? '—', unit: '' },
+    { label: 'Complexity', a: pdA.complexity != null ? Math.round(Number(pdA.complexity)) : '—', b: pdB.complexity != null ? Math.round(Number(pdB.complexity)) : '—', unit: '' },
+    { label: 'Formula', a: pdA.molecular_formula || '—', b: pdB.molecular_formula || '—', unit: '' },
+  ];
+
+  const ro5 = (pd: any) => {
+    if (pd.molecular_weight == null || pd.xlogp == null || pd.hbd == null || pd.hba == null) return null;
+    return parseFloat(pd.molecular_weight) <= 500 && parseFloat(String(pd.xlogp)) <= 5 && pd.hbd <= 5 && pd.hba <= 10;
+  };
+  const ro5A = ro5(pdA);
+  const ro5B = ro5(pdB);
+
+  // Merge all unique repurposing conditions
+  const candsA = reportA.repurposing_candidates || [];
+  const candsB = reportB.repurposing_candidates || [];
+  const allConditions = Array.from(new Set([...candsA.map((c: any) => c.condition), ...candsB.map((c: any) => c.condition)]));
+
+  // Merge clinical trial conditions
+  const trialsA = reportA.clinical_data || [];
+  const trialsB = reportB.clinical_data || [];
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-500">
+      {/* ── Hero comparison header ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-4 items-stretch">
+        {/* Molecule A card */}
+        <div className={clsx("bg-zinc-900/60 border rounded-2xl p-6 relative overflow-hidden", phoenixWinner === 'A' ? 'border-emerald-500/40' : 'border-zinc-800/60')}>
+          {phoenixWinner === 'A' && <div className="absolute top-3 right-3 bg-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-emerald-500/30">Higher Score</div>}
+          <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 font-semibold">Molecule A</p>
+          <h2 className="text-2xl font-bold text-zinc-100 mb-1">{reportA.molecule}</h2>
+          {pdA.cid && <p className="text-xs text-zinc-500 font-mono mb-4">CID: {pdA.cid}</p>}
+          <div className="flex items-center gap-6 mt-2">
+            <div className="flex-1"><GaugeScore title="Phoenix" score={scoreA} max={10} /></div>
+            <div className="flex-1"><GaugeScore title="Viability" score={viabA} max={10} /></div>
+          </div>
+          {pdA.drug_classes?.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-4">
+              {pdA.drug_classes.slice(0, 3).map((dc: string, i: number) => (
+                <span key={i} className="text-[10px] px-2 py-0.5 bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 rounded">{dc}</span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* VS divider */}
+        <div className="flex items-center justify-center">
+          <div className="bg-zinc-800/60 border border-zinc-700/50 rounded-full w-14 h-14 flex items-center justify-center">
+            <GitCompare className="w-6 h-6 text-cyan-400" />
+          </div>
+        </div>
+
+        {/* Molecule B card */}
+        <div className={clsx("bg-zinc-900/60 border rounded-2xl p-6 relative overflow-hidden", phoenixWinner === 'B' ? 'border-emerald-500/40' : 'border-zinc-800/60')}>
+          {phoenixWinner === 'B' && <div className="absolute top-3 right-3 bg-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-emerald-500/30">Higher Score</div>}
+          <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 font-semibold">Molecule B</p>
+          <h2 className="text-2xl font-bold text-zinc-100 mb-1">{reportB.molecule}</h2>
+          {pdB.cid && <p className="text-xs text-zinc-500 font-mono mb-4">CID: {pdB.cid}</p>}
+          <div className="flex items-center gap-6 mt-2">
+            <div className="flex-1"><GaugeScore title="Phoenix" score={scoreB} max={10} /></div>
+            <div className="flex-1"><GaugeScore title="Viability" score={viabB} max={10} /></div>
+          </div>
+          {pdB.drug_classes?.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-4">
+              {pdB.drug_classes.slice(0, 3).map((dc: string, i: number) => (
+                <span key={i} className="text-[10px] px-2 py-0.5 bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 rounded">{dc}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Structure comparison ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {[reportA, reportB].map((r, idx) => (
+          <div key={idx} className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-zinc-800/60 flex items-center justify-between">
+              <span className="text-xs text-zinc-400 uppercase tracking-wider font-semibold">{r.molecule} — 2D Structure</span>
+              {(r.pubchem_data?.cid) && <span className="text-[10px] text-zinc-600 font-mono">CID {r.pubchem_data.cid}</span>}
+            </div>
+            <div className="h-52 flex items-center justify-center bg-black/40 p-6">
+              <div className="w-full h-full flex justify-center items-center invert invert-[.8]">
+                <AnimatedMolecule molecule={r.molecule || "O=C(C)Oc1ccccc1C(=O)O"} />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Molecular Properties Comparison Table ── */}
+      <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl overflow-hidden">
+        <div className="px-6 py-4 border-b border-zinc-800/60 flex items-center gap-2">
+          <Beaker className="w-4 h-4 text-cyan-400" />
+          <h3 className="text-sm font-semibold text-zinc-200 uppercase tracking-wider">Physicochemical Properties</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-zinc-800/60">
+                <th className="text-left px-6 py-3 text-xs text-zinc-500 uppercase tracking-wider font-medium">Property</th>
+                <th className="text-center px-6 py-3 text-xs text-cyan-400 uppercase tracking-wider font-semibold">{reportA.molecule}</th>
+                <th className="text-center px-6 py-3 text-xs text-cyan-400 uppercase tracking-wider font-semibold">{reportB.molecule}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {propRows.map((row, i) => (
+                <tr key={i} className="border-b border-zinc-800/30 hover:bg-zinc-800/20 transition-colors">
+                  <td className="px-6 py-3 text-zinc-400 font-medium">{row.label}</td>
+                  <td className="px-6 py-3 text-center text-zinc-200 font-mono">{row.a}{row.unit && row.a !== '—' ? <span className="text-zinc-600 text-xs ml-1">{row.unit}</span> : ''}</td>
+                  <td className="px-6 py-3 text-center text-zinc-200 font-mono">{row.b}{row.unit && row.b !== '—' ? <span className="text-zinc-600 text-xs ml-1">{row.unit}</span> : ''}</td>
+                </tr>
+              ))}
+              <tr className="border-b border-zinc-800/30 hover:bg-zinc-800/20 transition-colors">
+                <td className="px-6 py-3 text-zinc-400 font-medium">Rule of 5</td>
+                <td className="px-6 py-3 text-center">
+                  {ro5A === null ? <span className="text-zinc-600">—</span> : ro5A ? <span className="text-emerald-400 font-semibold">Pass</span> : <span className="text-rose-400 font-semibold">Fail</span>}
+                </td>
+                <td className="px-6 py-3 text-center">
+                  {ro5B === null ? <span className="text-zinc-600">—</span> : ro5B ? <span className="text-emerald-400 font-semibold">Pass</span> : <span className="text-rose-400 font-semibold">Fail</span>}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ── Repurposing Opportunities Comparison ── */}
+      {allConditions.length > 0 && (
+        <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl overflow-hidden">
+          <div className="px-6 py-4 border-b border-zinc-800/60 flex items-center gap-2">
+            <Target className="w-4 h-4 text-cyan-400" />
+            <h3 className="text-sm font-semibold text-zinc-200 uppercase tracking-wider">Repurposing Opportunities</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-800/60">
+                  <th className="text-left px-6 py-3 text-xs text-zinc-500 uppercase tracking-wider font-medium">Indication</th>
+                  <th className="text-center px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider font-medium" colSpan={2}>{reportA.molecule}</th>
+                  <th className="text-center px-4 py-3 text-xs text-zinc-500 uppercase tracking-wider font-medium" colSpan={2}>{reportB.molecule}</th>
+                </tr>
+                <tr className="border-b border-zinc-800/40">
+                  <th></th>
+                  <th className="text-center px-2 py-1.5 text-[10px] text-zinc-600 uppercase">Score</th>
+                  <th className="text-center px-2 py-1.5 text-[10px] text-zinc-600 uppercase">Phase</th>
+                  <th className="text-center px-2 py-1.5 text-[10px] text-zinc-600 uppercase">Score</th>
+                  <th className="text-center px-2 py-1.5 text-[10px] text-zinc-600 uppercase">Phase</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allConditions.map((cond, i) => {
+                  const cA = candsA.find((c: any) => c.condition === cond);
+                  const cB = candsB.find((c: any) => c.condition === cond);
+                  return (
+                    <tr key={i} className="border-b border-zinc-800/30 hover:bg-zinc-800/20 transition-colors">
+                      <td className="px-6 py-3 text-zinc-300 font-medium max-w-[200px] truncate">{cond as string}</td>
+                      <td className="px-2 py-3 text-center font-mono text-sm">{cA ? <span className="text-cyan-400">{Number(cA.repurposing_score).toFixed(1)}</span> : <span className="text-zinc-700">—</span>}</td>
+                      <td className="px-2 py-3 text-center">{cA ? <Badge variant="outline" className="text-[9px] border-zinc-700 text-zinc-300">{cA.max_phase}</Badge> : <span className="text-zinc-700">—</span>}</td>
+                      <td className="px-2 py-3 text-center font-mono text-sm">{cB ? <span className="text-cyan-400">{Number(cB.repurposing_score).toFixed(1)}</span> : <span className="text-zinc-700">—</span>}</td>
+                      <td className="px-2 py-3 text-center">{cB ? <Badge variant="outline" className="text-[9px] border-zinc-700 text-zinc-300">{cB.max_phase}</Badge> : <span className="text-zinc-700">—</span>}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── AI Analysis Comparison — Opportunities & Risks ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Opportunities */}
+        <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl overflow-hidden">
+          <div className="px-6 py-4 border-b border-zinc-800/60 flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-emerald-400" />
+            <h3 className="text-sm font-semibold text-zinc-200 uppercase tracking-wider">Top Opportunities</h3>
+          </div>
+          <div className="divide-y divide-zinc-800/60">
+            {[reportA, reportB].map((r, idx) => (
+              <div key={idx} className="p-5">
+                <p className="text-xs text-cyan-400 uppercase tracking-wider font-semibold mb-3">{r.molecule}</p>
+                <ul className="space-y-2">
+                  {(r.ai_analysis?.top_opportunities || []).length > 0
+                    ? (r.ai_analysis.top_opportunities || []).slice(0, 3).map((opp: string, i: number) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-zinc-300">
+                        <CheckCircle className="w-3.5 h-3.5 text-emerald-400 mt-0.5 shrink-0" />
+                        <span>{opp}</span>
+                      </li>
+                    ))
+                    : <li className="text-sm text-zinc-600 italic">No opportunities listed.</li>
+                  }
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Risks */}
+        <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl overflow-hidden">
+          <div className="px-6 py-4 border-b border-zinc-800/60 flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-rose-400" />
+            <h3 className="text-sm font-semibold text-zinc-200 uppercase tracking-wider">Key Risks</h3>
+          </div>
+          <div className="divide-y divide-zinc-800/60">
+            {[reportA, reportB].map((r, idx) => (
+              <div key={idx} className="p-5">
+                <p className="text-xs text-cyan-400 uppercase tracking-wider font-semibold mb-3">{r.molecule}</p>
+                <ul className="space-y-2">
+                  {(r.ai_analysis?.top_risks || []).length > 0
+                    ? (r.ai_analysis.top_risks || []).slice(0, 3).map((risk: string, i: number) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-zinc-300">
+                        <ShieldAlert className="w-3.5 h-3.5 text-rose-400 mt-0.5 shrink-0" />
+                        <span>{risk}</span>
+                      </li>
+                    ))
+                    : <li className="text-sm text-zinc-600 italic">No risks listed.</li>
+                  }
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Verdict ── */}
+      {phoenixWinner && phoenixWinner !== 'tie' && (
+        <div className="bg-gradient-to-br from-emerald-950/30 to-cyan-950/30 border border-emerald-800/40 rounded-2xl p-6 text-center">
+          <Sparkles className="w-6 h-6 text-emerald-400 mx-auto mb-3" />
+          <h3 className="text-lg font-semibold text-zinc-100 mb-1">AI Recommendation</h3>
+          <p className="text-sm text-zinc-400">
+            Based on Phoenix Score analysis, <span className="text-emerald-400 font-semibold">{phoenixWinner === 'A' ? reportA.molecule : reportB.molecule}</span> shows
+            stronger repurposing potential with a score of <span className="text-emerald-400 font-semibold">{(phoenixWinner === 'A' ? scoreA : scoreB)?.toFixed(1)}/10</span> vs{' '}
+            <span className="text-zinc-300">{(phoenixWinner === 'A' ? scoreB : scoreA)?.toFixed(1)}/10</span>.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function ReportPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const compareId = searchParams.get('compare');
   const [report, setReport] = useState<any>(null);
+  const [compareReport, setCompareReport] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -1452,6 +1717,7 @@ export default function ReportPage() {
   const [shareState, setShareState] = useState<'idle' | 'loading' | 'copied'>('idle');
   const [currency, setCurrency] = useState<'USD' | 'INR'>('INR');
   const [structureMode, setStructureMode] = useState<'2d' | '3d'>('2d');
+  const [compareMolecule, setCompareMolecule] = useState<'A' | 'B'>('A');
   const [activeSidebar, setActiveSidebar] = useState<'ai' | 'refs' | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(400);
 
@@ -1480,20 +1746,28 @@ export default function ReportPage() {
 
   useEffect(() => {
     if (!id) return;
-    fetch(`/api/reports/${id}`)
-      .then(res => {
-        if (!res.ok) throw new Error(`Server returned ${res.status}`);
-        return res.json();
-      })
-      .then(data => {
-        setReport(data);
-        setLoading(false);
-      })
+    const fetches: Promise<void>[] = [
+      fetch(`/api/reports/${id}`)
+        .then(res => {
+          if (!res.ok) throw new Error(`Server returned ${res.status}`);
+          return res.json();
+        })
+        .then(data => { setReport(data); }),
+    ];
+    if (compareId) {
+      fetches.push(
+        fetch(`/api/reports/${compareId}`)
+          .then(res => res.ok ? res.json() : null)
+          .then(data => { if (data) setCompareReport(data); })
+      );
+    }
+    Promise.all(fetches)
+      .then(() => setLoading(false))
       .catch(err => {
         setLoadError(err.message || 'Failed to load report');
         setLoading(false);
       });
-  }, [id]);
+  }, [id, compareId]);
 
   const INR_RATE = 83.5;
   const formatMarketSize = (usd_billion: number) => {
@@ -1709,7 +1983,12 @@ export default function ReportPage() {
                   <ArrowLeft size={16} className="mr-1 inline" /> Back to Search
                 </Button>
               </div>
-              <h1 className="text-lg font-semibold text-zinc-100 tracking-tight">{report.molecule} Analysis Report</h1>
+              <h1 className="text-lg font-semibold text-zinc-100 tracking-tight">
+                {compareReport
+                  ? <>{report.molecule} <span className="text-zinc-500 font-normal mx-1">vs</span> {compareReport.molecule}</>
+                  : <>{report.molecule} Analysis Report</>
+                }
+              </h1>
               <div className="flex items-center gap-2 mt-1 text-xs font-medium text-zinc-500">
                 <span onClick={() => navigate('/search')} className="hover:text-zinc-300 cursor-pointer transition-colors">Search</span>
                 <span className="text-zinc-700">/</span>
@@ -1799,32 +2078,68 @@ export default function ReportPage() {
           </div>
 
           <main className="flex-1 w-full px-6 lg:px-12 pb-20 relative z-10 mx-auto max-w-[1600px]">
+            {/* Overview tab */}
             <div className={activeTab === 'overview' ? '' : 'hidden'}>
-              <OverviewTab report={report} onStartSimulation={() => setShowSimulation(true)} structureMode={structureMode} setStructureMode={setStructureMode} setActiveSidebar={setActiveSidebar} />
-            </div>
-            <div className={activeTab === 'science' ? '' : 'hidden'}>
-              <ScienceTab report={report} setActiveSidebar={setActiveSidebar} />
-            </div>
-            <div className={activeTab === 'market' ? '' : 'hidden'}>
-              <MarketTab report={report} currency={currency} formatMarketSize={formatMarketSize} />
-            </div>
-            <div className={activeTab === 'twin' ? 'animate-in fade-in duration-500 w-full mx-auto' : 'hidden'}>
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-medium text-zinc-100 flex items-center gap-2">
-                  <Fingerprint className="w-5 h-5 text-cyan-400" /> Molecular Twin Engine
-                </h2>
-              </div>
-              {report?.pubchem_data?.cid ? (
-                <RepurposingAlternativeFinder initialCid={report.pubchem_data.cid} hideSearch={true} />
+              {compareReport ? (
+                <CompareView reportA={report} reportB={compareReport} formatMarketSize={formatMarketSize} />
               ) : (
-                <div className="bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-2xl p-12 text-center text-zinc-500 flex flex-col items-center">
-                  <Fingerprint className="w-10 h-10 mb-4 opacity-50 text-cyan-400" />
-                  <p className="italic text-sm">No valid CID found to generate twin models for this compound.</p>
-                </div>
+                <OverviewTab report={report} onStartSimulation={() => setShowSimulation(true)} structureMode={structureMode} setStructureMode={setStructureMode} setActiveSidebar={setActiveSidebar} />
               )}
             </div>
+
+            {/* Molecule A/B toggle for compare mode (non-overview tabs) */}
+            {compareReport && activeTab !== 'overview' && (
+              <div className="flex items-center justify-center mb-6">
+                <div className="inline-flex items-center bg-zinc-900/80 border border-zinc-800/60 rounded-full p-1 gap-0.5">
+                  <button onClick={() => setCompareMolecule('A')}
+                    className={clsx('px-5 py-2 rounded-full text-sm font-medium transition-all', compareMolecule === 'A' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-lg shadow-cyan-500/10' : 'text-zinc-500 hover:text-zinc-300 border border-transparent')}>
+                    {report.molecule}
+                  </button>
+                  <button onClick={() => setCompareMolecule('B')}
+                    className={clsx('px-5 py-2 rounded-full text-sm font-medium transition-all', compareMolecule === 'B' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-lg shadow-cyan-500/10' : 'text-zinc-500 hover:text-zinc-300 border border-transparent')}>
+                    {compareReport.molecule}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Science tab */}
+            <div className={activeTab === 'science' ? '' : 'hidden'}>
+              <ScienceTab report={compareReport && compareMolecule === 'B' ? compareReport : report} setActiveSidebar={setActiveSidebar} />
+            </div>
+
+            {/* Market tab */}
+            <div className={activeTab === 'market' ? '' : 'hidden'}>
+              <MarketTab report={compareReport && compareMolecule === 'B' ? compareReport : report} currency={currency} formatMarketSize={formatMarketSize} />
+            </div>
+
+            {/* Twin tab */}
+            <div className={activeTab === 'twin' ? 'animate-in fade-in duration-500 w-full mx-auto' : 'hidden'}>
+              {(() => {
+                const activeReport = compareReport && compareMolecule === 'B' ? compareReport : report;
+                return (
+                  <>
+                    <div className="flex items-center justify-between mb-6">
+                      <h2 className="text-xl font-medium text-zinc-100 flex items-center gap-2">
+                        <Fingerprint className="w-5 h-5 text-cyan-400" /> Molecular Twin Engine
+                      </h2>
+                    </div>
+                    {activeReport?.pubchem_data?.cid ? (
+                      <RepurposingAlternativeFinder key={activeReport.pubchem_data.cid} initialCid={activeReport.pubchem_data.cid} hideSearch={true} />
+                    ) : (
+                      <div className="bg-black/40 backdrop-blur-md border border-zinc-800/50 rounded-2xl p-12 text-center text-zinc-500 flex flex-col items-center">
+                        <Fingerprint className="w-10 h-10 mb-4 opacity-50 text-cyan-400" />
+                        <p className="italic text-sm">No valid CID found to generate twin models for this compound.</p>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* Synthesis tab */}
             <div className={activeTab === 'synthesis' ? '' : 'hidden'}>
-              <AISynthesisTab report={report} setActiveSidebar={setActiveSidebar} />
+              <AISynthesisTab report={compareReport && compareMolecule === 'B' ? compareReport : report} setActiveSidebar={setActiveSidebar} />
             </div>
           </main>
         </div>

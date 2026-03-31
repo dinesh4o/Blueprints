@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowUp, Sparkles, LayoutGrid, Command, Search as SearchIcon, Shield, TrendingUp, Menu, X, History, ChevronRight, FileText, Database, Activity, GitCompare, Mic } from "lucide-react";
+import { ArrowUp, Sparkles, LayoutGrid, Command, Search as SearchIcon, Shield, TrendingUp, Menu, X, History, ChevronRight, FileText, Database, Activity } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { LiquidBackground } from "@/components/LiquidBackground";
 import { ShaderButton } from "@/components/ui/ShaderButton";
@@ -45,9 +45,18 @@ function FloatingCard({
 
 export default function SearchPage() {
   const [query, setQuery] = useState("");
+  const [molecules, setMolecules] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [inputFocused, setInputFocused] = useState(false);
+
+  // Auto-dismiss error after 5 seconds
+  useEffect(() => {
+    if (!error) return;
+    const t = setTimeout(() => setError(null), 5000);
+    return () => clearTimeout(t);
+  }, [error]);
 
   // History panel state
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -98,27 +107,65 @@ export default function SearchPage() {
     return () => clearTimeout(timer);
   }, [query]);
 
-  const handleAnalyze = async (molecule: string) => {
-    if (!molecule.trim()) return;
+  const addMolecule = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    if (molecules.length >= 2) return;
+    if (molecules.some(m => m.toLowerCase() === trimmed.toLowerCase())) return;
+    setMolecules(prev => [...prev, trimmed]);
+    setQuery("");
+    setSuggestions([]);
+  };
+
+  const removeMolecule = (index: number) => {
+    setMolecules(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleAnalyze = async () => {
+    // Collect all molecules: chips + current typed text
+    const allMolecules = [...molecules];
+    if (query.trim() && !allMolecules.some(m => m.toLowerCase() === query.trim().toLowerCase())) {
+      allMolecules.push(query.trim());
+    }
+    if (allMolecules.length === 0) return;
+
     setLoading(true);
     setError(null);
 
     try {
-      const res = await fetch("/api/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ molecule }),
-      });
-      const data = await res.json();
+      if (allMolecules.length >= 2) {
+        // Compare mode: analyze both
+        const [res1, res2] = await Promise.all([
+          fetch("/api/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ molecule: allMolecules[0] }),
+          }),
+          fetch("/api/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ molecule: allMolecules[1] }),
+          }),
+        ]);
+        const [data1, data2] = await Promise.all([res1.json(), res2.json()]);
 
-      if (!res.ok) {
-        setError(data.error || "Failed to authenticate molecule.");
-        setLoading(false);
-        return;
-      }
+        if (!res1.ok) { setError(data1.error || `Failed for ${allMolecules[0]}`); setLoading(false); return; }
+        if (!res2.ok) { setError(data2.error || `Failed for ${allMolecules[1]}`); setLoading(false); return; }
 
-      if (data.job_id) {
-        navigate(`/progress/${data.job_id}`);
+        if (data1.job_id && data2.job_id) {
+          navigate(`/progress/${data1.job_id}?compare=${data2.job_id}`);
+        }
+      } else {
+        // Single molecule
+        const res = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ molecule: allMolecules[0] }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) { setError(data.error || "Failed to authenticate molecule."); setLoading(false); return; }
+        if (data.job_id) navigate(`/progress/${data.job_id}`);
       }
     } catch (e) {
       setError("Network error occurred. Please try again.");
@@ -265,43 +312,101 @@ export default function SearchPage() {
         </p>
 
         <div className="w-full max-w-xl flex flex-col gap-3 relative">
-          <div className="relative group">
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleAnalyze(query)}
-              disabled={loading}
-              placeholder="Search molecules, targets, or mechanisms..."
-              className="w-full bg-zinc-900/80 hover:bg-zinc-800/80 focus:bg-zinc-900 transition-all duration-300 border border-zinc-700/50 focus:border-zinc-300/80 rounded-full pl-6 pr-24 py-4 text-base text-zinc-100 placeholder:text-zinc-400 focus:outline-none"
-            />
-            {/* Command K indicator */}
-            <div className="absolute right-[110px] top-1/2 -translate-y-1/2 flex items-center gap-1 text-zinc-500 pointer-events-none hidden sm:flex border border-zinc-800 rounded px-2 py-0.5">
-              <Command size={12} />
-              <span className="text-[10px] font-semibold">K</span>
-            </div>
+          {/* Single chip-based search input */}
+          <div
+            className="relative group flex flex-wrap items-center gap-2 bg-zinc-900/80 hover:bg-zinc-800/80 focus-within:bg-zinc-900 transition-all duration-300 border border-zinc-700/50 focus-within:border-zinc-300/80 rounded-full px-4 py-2.5 min-h-[56px] cursor-text"
+            onClick={() => {
+              const el = document.getElementById('mol-search-input');
+              el?.focus();
+            }}
+          >
+            {/* Molecule chips */}
+            <AnimatePresence mode="popLayout">
+              {molecules.map((mol, i) => (
+                <motion.span
+                  key={mol}
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  layout
+                  className="inline-flex items-center gap-1.5 bg-white/10 border border-white/10 text-zinc-100 rounded-full pl-3 pr-1.5 py-1 text-sm font-medium"
+                >
+                  {mol}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); removeMolecule(i); }}
+                    className="w-5 h-5 rounded-full hover:bg-white/20 flex items-center justify-center text-zinc-400 hover:text-white transition-colors"
+                  >
+                    <X size={12} />
+                  </button>
+                </motion.span>
+              ))}
+            </AnimatePresence>
+
+            {/* Text input */}
+            {molecules.length < 2 && (
+              <input
+                id="mol-search-input"
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    if (query.trim() && molecules.length < 2) {
+                      e.preventDefault();
+                      addMolecule(query);
+                    }
+                  } else if (e.key === "Backspace" && !query && molecules.length > 0) {
+                    removeMolecule(molecules.length - 1);
+                  } else if (e.key === "," || e.key === "Tab") {
+                    if (query.trim() && molecules.length < 2) {
+                      e.preventDefault();
+                      addMolecule(query);
+                    }
+                  }
+                }}
+                onFocus={() => setInputFocused(true)}
+                onBlur={() => setTimeout(() => setInputFocused(false), 200)}
+                disabled={loading}
+                placeholder={molecules.length === 0 ? "Search molecules, targets, or mechanisms..." : molecules.length < 2 ? "Add another to compare..." : ""}
+                className="flex-1 min-w-[120px] bg-transparent text-base text-zinc-100 placeholder:text-zinc-400 focus:outline-none py-1"
+              />
+            )}
 
             {/* Voice Search */}
-            <div className="absolute right-14 top-1/2 -translate-y-1/2 z-10">
-              <VoiceSearch
-                onResult={(text) => {
-                  setQuery(text);
-                  handleAnalyze(text);
-                }}
-              />
+            <div className="ml-auto flex items-center gap-1 flex-shrink-0">
+              {molecules.length < 2 && (
+                <div className="z-10">
+                  <VoiceSearch
+                    onResult={(text) => {
+                      if (molecules.length < 2) addMolecule(text);
+                    }}
+                  />
+                </div>
+              )}
+              <button
+                onClick={() => handleAnalyze()}
+                disabled={loading || (molecules.length === 0 && !query.trim())}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white disabled:opacity-50 transition-colors"
+              >
+                <ArrowUp size={16} />
+              </button>
             </div>
-            
-            <button 
-              onClick={() => handleAnalyze(query)}
-              disabled={loading || !query.trim()}
-              className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white disabled:opacity-50 transition-colors"
-            >
-              <ArrowUp size={16} />
-            </button>
           </div>
 
+          {/* Hint text */}
+          {molecules.length === 1 && !query && (
+            <motion.p
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-xs text-zinc-500 px-2"
+            >
+              Type another molecule to compare, or click the arrow to analyze
+            </motion.p>
+          )}
+
+          {/* Autocomplete suggestions */}
           <AnimatePresence>
-            {suggestions.length > 0 && query.length >= 2 && !loading && (
+            {suggestions.length > 0 && query.length >= 2 && !loading && inputFocused && (
               <motion.div
                 initial={{ opacity: 0, y: -5 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -311,9 +416,9 @@ export default function SearchPage() {
                 {suggestions.map((sug, i) => (
                   <button
                     key={i}
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => {
-                      setQuery(sug);
-                      handleAnalyze(sug);
+                      addMolecule(sug);
                     }}
                     className="w-full text-left px-5 py-3 hover:bg-zinc-900 text-zinc-300 border-b border-zinc-800 last:border-0 flex items-center gap-3 transition-colors"
                   >
@@ -323,9 +428,9 @@ export default function SearchPage() {
                 ))}
               </motion.div>
             )}
-            
+
             {loading && (
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
@@ -336,12 +441,17 @@ export default function SearchPage() {
               </motion.div>
             )}
             {error && (
-              <motion.div 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="absolute -bottom-8 left-4 text-rose-500 text-sm"
+              <motion.div
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -5 }}
+                className="absolute top-full left-0 right-0 mt-3 bg-rose-500/10 border border-rose-500/30 rounded-xl px-4 py-3 flex items-start gap-3 z-20 backdrop-blur-md"
               >
-                {error}
+                <span className="text-rose-400 text-base mt-0.5">⚠</span>
+                <div>
+                  <p className="text-rose-300 text-sm font-medium">Molecule not found</p>
+                  <p className="text-rose-400/80 text-xs mt-0.5">{error}</p>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -350,13 +460,6 @@ export default function SearchPage() {
 
       {/* Floating Bottom Right Nav/Support */}
       <div className="absolute bottom-6 right-6 flex items-center gap-3 z-50">
-        <button 
-          onClick={() => navigate("/compare")}
-          className="w-12 h-12 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-xl flex items-center justify-center text-indigo-400 hover:text-indigo-300 backdrop-blur-md transition-colors border border-indigo-500/20"
-          title="Compare two drugs"
-        >
-          <GitCompare size={20} />
-        </button>
         <button 
           onClick={() => navigate("/community")}
           className="w-12 h-12 bg-white/5 hover:bg-white/10 rounded-xl flex items-center justify-center text-zinc-400 hover:text-white backdrop-blur-md transition-colors border border-white/10"

@@ -57,7 +57,7 @@ async function fetchMarketEstimates(conditions: string[]): Promise<Record<string
       const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(12000),
         body: JSON.stringify({
           model: 'llama-3.1-8b-instant',
           messages: [
@@ -331,8 +331,8 @@ async function startServer() {
         touchAfter: 24 * 3600, // Lazy session update (in seconds)
       }),
       cookie: {
-        secure: process.env.NODE_ENV === 'production', // HTTPS only in production
-        httpOnly: true, // Prevents client-side JS from reading the cookie
+        secure: process.env.NODE_ENV === 'production',
+        httpOnly: true,
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       },
@@ -379,7 +379,7 @@ async function startServer() {
     // Very early validation before creating jobs
     const isReal = await validateMolecule(molecule);
     if (!isReal) {
-      return res.status(400).json({ error: 'No real-world data found for this molecule. Please try a valid pharmacological term.' });
+      return res.status(400).json({ error: `"${molecule}" wasn't found in PubChem or ClinicalTrials.gov. Try a valid drug name like Aspirin, Metformin, or Ibuprofen.` });
     }
 
     let jobId = crypto.randomUUID();
@@ -650,6 +650,7 @@ async function startServer() {
     }
   });
   async function validateMolecule(name: string): Promise<boolean> {
+    // Primary check: PubChem compound lookup — the gold standard for molecule validation
     try {
       const res = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encodeURIComponent(name)}/cids/JSON`);
       if (res.ok) {
@@ -658,8 +659,10 @@ async function startServer() {
       }
     } catch {}
 
+    // Fallback: ClinicalTrials.gov — but ONLY match as an intervention (drug name),
+    // not query.term which matches conditions like "cancer", "diabetes", etc.
     try {
-      const res = await fetch(`https://clinicaltrials.gov/api/v2/studies?query.term=${encodeURIComponent(name)}&pageSize=1`);
+      const res = await fetch(`https://clinicaltrials.gov/api/v2/studies?query.intr=${encodeURIComponent(name)}&pageSize=1`);
       if (res.ok) {
         const data = await res.json();
         if (data?.studies?.length > 0) return true;
@@ -740,6 +743,16 @@ async function startServer() {
       updateStep(6, 'done', `${similarMolecules.length} structural analogs analyzed`, similarMolecules.length);
       updateStep(7, 'running', 'Synthesizing report...');
 
+      // ── Start market estimates early (parallel with debate) ──
+      const uniqueConditions = [...new Set(
+        clinicalData.map((t: any) => t.condition).filter(Boolean)
+          .map((c: string) => {
+            const canon = normalizeDiseaseName(c);
+            return canon.replace(/\b\w/g, (ch: string) => ch.toUpperCase());
+          })
+      )] as string[];
+      const marketDataPromise = fetchMarketEstimates(uniqueConditions);
+
       // ── Adversarial Debate: 3 separate LLM calls ──
       let debate_data: any = null;
       try {
@@ -772,7 +785,7 @@ AI Viability Score: ${resultState.viabilityScore}/10`;
                   temperature: 0.4,
                   max_tokens: 600,
                 }),
-                signal: AbortSignal.timeout(30000),
+                signal: AbortSignal.timeout(12000),
               });
               if (resp.status === 429 || resp.status === 401) continue;
               if (resp.status === 200) {
@@ -831,16 +844,8 @@ AI Viability Score: ${resultState.viabilityScore}/10`;
 
         const finalViabilityScore = (resultState.viabilityScore != null && resultState.viabilityScore > 0) ? resultState.viabilityScore : null;
 
-        // Build repurposing candidates and market analysis from real clinical data + LLM market estimates
-        // Deduplicate by canonical disease name BEFORE passing to LLM (prevents identical $57.8B entries)
-        const uniqueConditions = [...new Set(
-          clinicalData.map((t: any) => t.condition).filter(Boolean)
-            .map((c: string) => {
-              const canon = normalizeDiseaseName(c);
-              return canon.replace(/\b\w/g, (ch: string) => ch.toUpperCase()); // Title-case
-            })
-        )] as string[];
-        const marketData = await fetchMarketEstimates(uniqueConditions);
+        // Await market data (was started in parallel with debate)
+        const marketData = await marketDataPromise;
         const repurposing_candidates = buildRepurposingCandidates(clinicalData, marketData);
         const market_analysis = repurposing_candidates.map(c => ({
           condition: c.condition,

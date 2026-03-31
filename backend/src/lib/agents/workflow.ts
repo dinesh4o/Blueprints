@@ -83,13 +83,13 @@ async function fetchPubChemData(state: typeof GraphState.State) {
     // 3. Parallel PUG View section calls for rich annotation
     const [pharmaRes, drugInfoRes, diseasesRes, safetyRes] = await Promise.allSettled([
       // Section 8 — Pharmacology & Biochemistry (MOA, ADME, half-life, protein binding)
-      axios.get(`https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/${cid}/JSON?heading=Pharmacology+and+Biochemistry`, { timeout: 14000 }),
+      axios.get(`https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/${cid}/JSON?heading=Pharmacology+and+Biochemistry`, { timeout: 8000 }),
       // Section 7 — Drug & Medication Information (ATC codes, routes, drug class)
-      axios.get(`https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/${cid}/JSON?heading=Drug+and+Medication+Information`, { timeout: 14000 }),
+      axios.get(`https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/${cid}/JSON?heading=Drug+and+Medication+Information`, { timeout: 8000 }),
       // Section 13 — Associated Disorders & Diseases (disease annotations from CTD, DisGeNET)
-      axios.get(`https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/${cid}/JSON?heading=Associated+Disorders+and+Diseases`, { timeout: 14000 }),
+      axios.get(`https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/${cid}/JSON?heading=Associated+Disorders+and+Diseases`, { timeout: 8000 }),
       // Section 11/12 — Safety, Hazards, Toxicity (GHS, LD50)
-      axios.get(`https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/${cid}/JSON?heading=Toxicity`, { timeout: 12000 }),
+      axios.get(`https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/${cid}/JSON?heading=Toxicity`, { timeout: 8000 }),
     ]);
 
     const pharmaData   = pharmaRes.status   === 'fulfilled' ? pharmaRes.value.data   : null;
@@ -181,7 +181,7 @@ async function fetchSimilarMolecules(state: typeof GraphState.State) {
     // Tanimoto similarity ≥ 90%, exclude self
     const simRes = await axios.get(
       `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/fastsimilarity_2d/cid/${cid}/cids/JSON?Threshold=90&MaxRecords=10`,
-      { timeout: 15000 }
+      { timeout: 8000 }
     );
     const similarCIDs: number[] = (simRes.data?.IdentifierList?.CID || [])
       .filter((c: number) => c !== cid)
@@ -775,7 +775,7 @@ Output a JSON object with exactly 4 keys explaining the data:
             response_format: { type: 'json_object' },
             temperature: 0.2,
           },
-          { headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' }, validateStatus: () => true, timeout: 45000 }
+          { headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' }, validateStatus: () => true, timeout: 15000 }
         );
 
         if (response.status === 429 || response.status === 401) {

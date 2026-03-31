@@ -67,13 +67,35 @@ export function RepurposingAlternativeFinder({ initialCid, hideSearch }: { initi
       ]);
 
       const combined = aggregateNeighbors(sim2d, sub, superstruct, sim3d);
-      setAlternatives(combined);
 
-      const bestTwin = selectMolecularTwin(combined, sourceCid);
+      // Pre-check 3D conformer availability with actual GET (HEAD can lie)
+      // Check up to 30 candidates so we can fill 8 slots after filtering
+      const candidateCids = combined
+        .filter(a => a.cid !== sourceCid)
+        .sort((a, b) => b.structuralEvidenceScore - a.structuralEvidenceScore)
+        .slice(0, 30)
+        .map(a => a.cid);
+
+      const has3d = await Promise.all(
+        candidateCids.map(async (c) => {
+          try {
+            const r = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${c}/SDF?record_type=3d`);
+            if (!r.ok) return false;
+            const text = await r.text();
+            return text.length > 100; // valid SDF has substantial content
+          } catch { return false; }
+        })
+      );
+      const available3dCids = new Set(candidateCids.filter((_, i) => has3d[i]));
+
+      const filtered = combined.filter(a => a.cid === sourceCid || available3dCids.has(a.cid));
+      setAlternatives(filtered);
+
+      const bestTwin = selectMolecularTwin(filtered, sourceCid);
       setTwin(bestTwin);
 
       // Fetch names for top ~8 candidates to render headers
-      const topCids = combined
+      const topCids = filtered
         .filter(a => a.cid !== sourceCid)
         .sort((a, b) => b.structuralEvidenceScore - a.structuralEvidenceScore)
         .slice(0, 8)

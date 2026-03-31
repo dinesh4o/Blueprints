@@ -30,7 +30,8 @@ export function VoiceSearch({ onResult, onListening }: VoiceSearchProps) {
   const SpeechRecognition = typeof window !== 'undefined'
     ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     : null;
-  const supported = !!SpeechRecognition && !dead;
+  const isSecure = typeof window !== 'undefined' && window.isSecureContext;
+  const supported = !!SpeechRecognition && !dead && isSecure;
 
   useEffect(() => {
     if (!SpeechRecognition || dead) return;
@@ -55,9 +56,29 @@ export function VoiceSearch({ onResult, onListening }: VoiceSearchProps) {
       stopEverything();
 
       // Fatal errors — kill the feature for the entire browser session
-      if (e.error === 'network' || e.error === 'service-not-allowed') {
+      if (e.error === 'service-not-allowed') {
         sessionStorage.setItem('voice-search-disabled', '1');
         recognitionRef.current = null; // prevent further use
+        return;
+      }
+
+      // Network errors — usually a browser issue, not actual internet
+      if (e.error === 'network') {
+        // Detect problematic browsers
+        const ua = navigator.userAgent;
+        const isBrave = (navigator as any).brave != null;
+        const isFirefox = /Firefox\//i.test(ua);
+        const isEdge = /Edg\//i.test(ua);
+
+        if (isBrave) {
+          setErrorMsg('Voice search is not supported in Brave. Please use Chrome or Edge.');
+        } else if (isFirefox) {
+          setErrorMsg('Voice search is not supported in Firefox. Please use Chrome or Edge.');
+        } else if (!window.isSecureContext) {
+          setErrorMsg('Voice search requires localhost. Open http://localhost:5173 instead of an IP address.');
+        } else {
+          setErrorMsg('Voice search couldn\'t connect. Try Chrome or Edge — some browsers block the speech API.');
+        }
         return;
       }
 

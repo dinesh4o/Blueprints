@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertCircle, Sparkles } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -65,8 +65,11 @@ const UI_STEPS = [
 
 export default function ProgressPage() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const compareId = searchParams.get('compare');
   const navigate = useNavigate();
   const [job, setJob] = useState<any>(null);
+  const [compareJob, setCompareJob] = useState<any>(null);
   const [error, setError] = useState('');
   const [activeStepIndex, setActiveStepIndex] = useState(0);
   const [targetStepIndex, setTargetStepIndex] = useState(0);
@@ -114,6 +117,18 @@ export default function ProgressPage() {
         const data = await res.json();
         setJob(data);
 
+        // Also poll compare job if present
+        let compareData: any = null;
+        if (compareId) {
+          try {
+            const res2 = await fetch(`/api/status/${compareId}`);
+            if (res2.ok) {
+              compareData = await res2.json();
+              setCompareJob(compareData);
+            }
+          } catch {}
+        }
+
         // Sync UI step to latest running server step
         if (data.steps && data.status !== 'complete') {
           const runningIdx = data.steps.reduce((best: number, s: any, i: number) =>
@@ -125,13 +140,18 @@ export default function ProgressPage() {
           }
         }
 
-        if (data.status === 'complete') {
+        // For compare mode, wait until BOTH are done (use freshly fetched data, not stale state)
+        const compareReady = !compareId || (compareData?.status === 'complete' || compareData?.status === 'awaiting_ai');
+
+        if (data.status === 'complete' && compareReady) {
           clearInterval(interval);
           setTargetStepIndex(8);
+        } else if (data.status === 'complete' && !compareReady) {
+          // Primary done but compare still running — keep polling
         } else if (data.status === 'error') {
           clearInterval(interval);
           setError('Pipeline failed to complete.');
-        } else if (data.status === 'awaiting_ai') {
+        } else if (data.status === 'awaiting_ai' && compareReady) {
           setTargetStepIndex(8);
           clearInterval(interval); // Stop polling, AI phase will take over
         }
@@ -201,6 +221,15 @@ export default function ProgressPage() {
           body: JSON.stringify({ aiAnalysis }),
         });
         if (!completeRes.ok) throw new Error('Failed to save AI analysis');
+
+        // Also complete compare job if present
+        if (compareId && compareJob?.status === 'awaiting_ai') {
+          await fetch(`/api/complete_analysis/${compareId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ aiAnalysis }),
+          });
+        }
         
         setDebateData({
           advocate: aiAnalysis.top_opportunities?.slice(0, 3) || ['High viability due to established safety profile.'],
@@ -209,7 +238,7 @@ export default function ProgressPage() {
 
         // Force Debate Node to be visible for a few seconds before concluding
         await new Promise(resolve => setTimeout(resolve, 8000));
-        navigate(`/report/${id}`);
+        navigate(compareId ? `/report/${id}?compare=${compareId}` : `/report/${id}`);
       } catch (aiErr) {
         console.error('AI Analysis failed:', aiErr);
         setError('AI Analysis failed to complete.');
@@ -217,7 +246,7 @@ export default function ProgressPage() {
     };
 
     runAiAnalysis();
-  }, [activeStepIndex, job, id, navigate, isProcessingAi]);
+  }, [activeStepIndex, job, id, navigate, isProcessingAi, compareId, compareJob]);
 
   // ── Native Complete Navigation ─────────────────────────────────────────────
   useEffect(() => {
@@ -245,7 +274,7 @@ export default function ProgressPage() {
 
       // Ensure the user has enough time to read the 2-3 arguments
       const timeoutId = setTimeout(() => {
-        if (isSubscribed) navigate(`/report/${id}`);
+        if (isSubscribed) navigate(compareId ? `/report/${id}?compare=${compareId}` : `/report/${id}`);
       }, 9500); 
 
       return () => {
@@ -253,7 +282,7 @@ export default function ProgressPage() {
         clearTimeout(timeoutId);
       };
     }
-  }, [activeStepIndex, job?.status, id, navigate]);
+  }, [activeStepIndex, job?.status, id, navigate, compareId]);
 
   // ── Visual carousel advance (gated on real pipeline) ──────────
   useEffect(() => {
