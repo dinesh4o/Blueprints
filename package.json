@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "setup": "npm install && cd backend && npm install && cd ../frontend && npm install",
     "dev": "tsx backend/server.ts",
     "build": "vite build",
     "preview": "vite preview",

@@ -151,8 +151,8 @@ const PRICING_PLANS = [
   },
   {
     name: 'Researcher',
-    price: '$99',
-    period: 'per user/month',
+    price: '₹999',
+    period: 'per month',
     desc: 'Advanced intelligence for dedicated researchers and labs.',
     features: [
       'Unlimited comprehensive reports',
@@ -164,17 +164,17 @@ const PRICING_PLANS = [
     highlight: true,
   },
   {
-    name: 'Enterprise',
-    price: 'Custom',
-    period: 'billed annually',
-    desc: 'Tailored infrastructure for pharmaceutical companies.',
+    name: 'Research Organization',
+    price: '₹2,499',
+    period: 'per month',
+    desc: 'Tailored infrastructure for pharma teams & research organizations.',
     features: [
       'Everything in Researcher',
       'Private data orchestration',
-      'Custom LLM fine-tuning',
-      'Dedicated account manager'
+      'Team collaboration & sharing',
+      'Priority support & analytics'
     ],
-    buttonText: 'Contact Sales',
+    buttonText: 'Upgrade Now',
     highlight: false,
   }
 ];
@@ -242,7 +242,7 @@ function AnimatedFeatureCard({ scrollYProgress, index, feature }: { scrollYProgr
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function LandingPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, checkAuth } = useAuth();
   const [isNavigating, setIsNavigating] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { Razorpay } = useRazorpay();
@@ -265,46 +265,80 @@ export default function LandingPage() {
       return;
     }
     
-    if (planName === "Explorer" || planName === "Enterprise") {
+    if (planName === "Explorer") {
         return;
     }
-    
-    const amount = 9900; // in cents/paise
-    
-    const options: any = {
-      key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_SHFkFDv4q8dkSo', // Enter the Key ID generated from the Dashboard
-      amount: amount.toString(), // Amount is in currency subunits. Default currency is INR. Hence, 50000 refers to 50000 paise
-      currency: "USD",
-      name: "Phoenix Blueprint",
-      description: `${planName} Subscription`,
-      image: "https://example.com/your_logo",
-      handler: function (response: any) {
-         console.log(response.razorpay_payment_id);
-         console.log(response.razorpay_order_id);
-         console.log(response.razorpay_signature)
-      },
-      prefill: {
-        name: user.name || "User",
-        email: user.email || "user@example.com",
-        contact: "9999999999",
-      },
-      notes: {
-        address: "Phoenix Blueprint Corporate Office",
-      },
-      theme: {
-        color: "#3399cc",
-      },
-    };
 
-    const rzp1 = new Razorpay(options);
+    const planKey = planName === "Research Organization" ? "organization" : planName.toLowerCase();
 
-    rzp1.on("payment.failed", function (response: any) {
-         alert(`Payment failed: ${response.error.description}`);
-    });
+    try {
+      // 1. Create order on backend
+      const orderRes = await fetch('/api/auth/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ plan: planKey }),
+      });
+      const orderData = await orderRes.json();
+      if (!orderData.success) {
+        alert('Failed to create order. Please try again.');
+        return;
+      }
 
-    rzp1.open();
+      const options: any = {
+        key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_SHFkFDv4q8dkSo',
+        amount: orderData.order.amount.toString(),
+        currency: orderData.order.currency,
+        name: "Phoenix Blueprint",
+        description: `${planName} Subscription`,
+        order_id: orderData.order.id,
+        handler: async function (response: any) {
+          // 2. Verify payment on backend
+          try {
+            const verifyRes = await fetch('/api/auth/verify-payment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                plan: planKey,
+              }),
+            });
+            const verifyData = await verifyRes.json();
+            if (verifyData.success) {
+              // Refresh auth to get updated plan
+              await checkAuth();
+              navigate('/search');
+            } else {
+              alert('Payment verification failed. Contact support.');
+            }
+          } catch {
+            alert('Payment verification error. Contact support.');
+          }
+        },
+        prefill: {
+          name: user.name || "User",
+          email: user.email || "user@example.com",
+        },
+        theme: {
+          color: "#3399cc",
+        },
+      };
 
-  }, [Razorpay, user, navigate]);
+      const rzp1 = new Razorpay(options);
+
+      rzp1.on("payment.failed", function (response: any) {
+        alert(`Payment failed: ${response.error.description}`);
+      });
+
+      rzp1.open();
+    } catch {
+      alert('Something went wrong. Please try again.');
+    }
+
+  }, [Razorpay, user, navigate, checkAuth]);
 
   return (
     <main className="bg-[#f8fafc] dark:bg-[#000000] text-zinc-900 dark:text-[#ededed] font-sans selection:bg-zinc-200 dark:selection:bg-zinc-800 relative overflow-x-hidden">

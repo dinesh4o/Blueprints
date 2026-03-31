@@ -8,7 +8,9 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID || '',
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-      callbackURL: `${(process.env.CLIENT_URL || 'https://luvara.vercel.app').replace(/\/$/, '')}/api/auth/google/callback`,
+      callbackURL: process.env.NODE_ENV === 'development'
+        ? `http://localhost:${process.env.PORT || 3000}/api/auth/google/callback`
+        : `${(process.env.CLIENT_URL || 'https://luvara.vercel.app').replace(/\/$/, '')}/api/auth/google/callback`,
       proxy: true,
     },
     async (accessToken, refreshToken, profile, done) => {

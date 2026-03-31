@@ -80,7 +80,7 @@ export default function ComparePage() {
   const [history, setHistory] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch('/api/history')
+    fetch('/api/history', { credentials: 'include' })
       .then(r => r.json())
       .then(data => {
         if (Array.isArray(data)) {
@@ -102,7 +102,7 @@ export default function ComparePage() {
   const fetchSuggestions = async (query: string, setter: (s: string[]) => void) => {
     if (query.length < 2) { setter([]); return; }
     try {
-      const res = await fetch(`/api/autocomplete?q=${encodeURIComponent(query)}`);
+      const res = await fetch(`/api/autocomplete?q=${encodeURIComponent(query)}`, { credentials: 'include' });
       const data = await res.json();
       if (data.dictionary_terms?.compound) {
         setter(data.dictionary_terms.compound.slice(0, 5));
@@ -115,7 +115,7 @@ export default function ComparePage() {
     const existing = history.find(h => h.molecule.toLowerCase() === molecule.toLowerCase());
     if (existing) {
       try {
-        const res = await fetch(`/api/reports/${existing._id}`);
+        const res = await fetch(`/api/reports/${existing._id}`, { credentials: 'include' });
         if (res.ok) return await res.json();
       } catch { /* fall through */ }
     }
@@ -124,6 +124,7 @@ export default function ComparePage() {
       const res = await fetch('/api/analyze', {
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ molecule }),
       });
       const data = await res.json();
@@ -131,10 +132,10 @@ export default function ComparePage() {
         // Wait for completion
         for (let i = 0; i < 60; i++) {
           await new Promise(r => setTimeout(r, 2000));
-          const statusRes = await fetch(`/api/status/${data.job_id}`);
+          const statusRes = await fetch(`/api/status/${data.job_id}`, { credentials: 'include' });
           const status = await statusRes.json();
           if (status.status === 'complete' || status.status === 'awaiting_ai') {
-            const reportRes = await fetch(`/api/reports/${data.job_id}`);
+            const reportRes = await fetch(`/api/reports/${data.job_id}`, { credentials: 'include' });
             if (reportRes.ok) return await reportRes.json();
           }
           if (status.status === 'error') break;

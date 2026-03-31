@@ -58,7 +58,7 @@ export default function SearchPage() {
   useEffect(() => {
     // Fetch History from DB
     if (isHistoryOpen) {
-      fetch('/api/history')
+      fetch('/api/history', { credentials: 'include' })
         .then(res => res.json())
         .then(data => {
           if(Array.isArray(data)) {
@@ -86,7 +86,7 @@ export default function SearchPage() {
     }
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/autocomplete?q=${encodeURIComponent(query)}`);
+        const res = await fetch(`/api/autocomplete?q=${encodeURIComponent(query)}`, { credentials: 'include' });
         const data = await res.json();
         if (data.dictionary_terms && data.dictionary_terms.compound) {
           setSuggestions(data.dictionary_terms.compound.slice(0, 5));
@@ -107,6 +107,7 @@ export default function SearchPage() {
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: 'include',
         body: JSON.stringify({ molecule }),
       });
       const data = await res.json();

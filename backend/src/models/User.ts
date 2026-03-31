@@ -8,6 +8,8 @@ export interface IUser extends Document {
   googleId?: string;
   avatar?: string;
   authProvider: 'local' | 'google';
+  plan: 'free' | 'researcher' | 'organization';
+  planPaidAt?: Date;
   isActive: boolean;
   lastLogin?: Date;
   createdAt: Date;
@@ -46,6 +48,14 @@ const userSchema = new Schema<IUser>(
       type: String,
       enum: ['local', 'google'],
       default: 'local',
+    },
+    plan: {
+      type: String,
+      enum: ['free', 'researcher', 'organization'],
+      default: 'free',
+    },
+    planPaidAt: {
+      type: Date,
     },
     isActive: {
       type: Boolean,

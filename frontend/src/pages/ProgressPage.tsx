@@ -109,7 +109,7 @@ export default function ProgressPage() {
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/status/${id}`);
+        const res = await fetch(`/api/status/${id}`, { credentials: 'include' });
         if (!res.ok) throw new Error('Failed to fetch status');
         const data = await res.json();
         setJob(data);
@@ -198,6 +198,7 @@ export default function ProgressPage() {
         const completeRes = await fetch(`/api/complete_analysis/${id}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({ aiAnalysis }),
         });
         if (!completeRes.ok) throw new Error('Failed to save AI analysis');
@@ -227,7 +228,7 @@ export default function ProgressPage() {
       // Extract real LLM arguments from the generated report if available
       const fetchDebateData = async () => {
         try {
-          const res = await fetch(`/api/reports/${id}`);
+          const res = await fetch(`/api/reports/${id}`, { credentials: 'include' });
           if (!res.ok) throw new Error('Failed to fetch report');
           const data = await res.json();
           if (isSubscribed && data?.ai_analysis) {

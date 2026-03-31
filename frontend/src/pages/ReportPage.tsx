@@ -1480,7 +1480,7 @@ export default function ReportPage() {
 
   useEffect(() => {
     if (!id) return;
-    fetch(`/api/reports/${id}`)
+    fetch(`/api/reports/${id}`, { credentials: 'include' })
       .then(res => {
         if (!res.ok) throw new Error(`Server returned ${res.status}`);
         return res.json();
@@ -1521,6 +1521,7 @@ export default function ReportPage() {
       const res = await fetch(`/api/claude/chat/${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ message: userMessage }),
       });
       if (!res.ok || !res.body) {
@@ -1739,7 +1740,7 @@ export default function ReportPage() {
                   if (!id || shareState !== 'idle') return;
                   setShareState('loading');
                   try {
-                    const res = await fetch(`/api/reports/${id}/share`, { method: 'POST' });
+                    const res = await fetch(`/api/reports/${id}/share`, { method: 'POST', credentials: 'include' });
                     const data = await res.json();
                     if (data.shareToken) {
                       const url = `${window.location.origin}/shared/${data.shareToken}`;

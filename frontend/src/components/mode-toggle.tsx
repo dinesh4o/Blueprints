@@ -1,4 +1,4 @@
-import { Settings, LogOut, UserCircle } from "lucide-react"
+import { Settings, LogOut, UserCircle, Crown, Zap } from "lucide-react"
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 
@@ -60,7 +60,12 @@ export function ModeToggle() {
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-foreground truncate">{user.name || 'User'}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-semibold text-foreground truncate">{user.name || 'User'}</p>
+                      {user.plan && user.plan !== 'free' && (
+                        <Crown className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                      )}
+                    </div>
                     <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                   </div>
                 </div>
@@ -71,6 +76,17 @@ export function ModeToggle() {
                     <UserCircle className="mr-2 h-4 w-4" />
                     <span>Edit Profile</span>
                   </DropdownMenuItem>
+                  {(!user.plan || user.plan === 'free') ? (
+                    <DropdownMenuItem onClick={() => navigate('/profile?tab=settings')} className="rounded-lg cursor-pointer">
+                      <Zap className="mr-2 h-4 w-4 text-amber-400" />
+                      <span>Explore Plans</span>
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem onClick={() => navigate('/profile?tab=settings')} className="rounded-lg cursor-pointer">
+                      <Crown className={`mr-2 h-4 w-4 ${user.plan === 'organization' ? 'text-purple-400' : 'text-amber-400'}`} />
+                      <span className={`text-sm font-medium capitalize ${user.plan === 'organization' ? 'text-purple-400' : 'text-amber-400'}`}>{user.plan} Plan</span>
+                    </DropdownMenuItem>
+                  )}
                 </div>
                 <DropdownMenuSeparator className="bg-border/50" />
               </>
