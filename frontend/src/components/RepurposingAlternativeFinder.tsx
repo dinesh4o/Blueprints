@@ -59,12 +59,11 @@ export function RepurposingAlternativeFinder({ initialCid, hideSearch }: { initi
     try {
       const sourceCid = Number(searchCid);
       
-      const [sim2d, sub, superstruct, sim3d] = await Promise.all([
-        getSimilarityNeighbors(sourceCid),
-        getSubstructureNeighbors(sourceCid),
-        getSuperstructureNeighbors(sourceCid),
-        get3DSimilarityNeighbors(sourceCid)
-      ]);
+      // Stagger PubChem searches to avoid rate limiting (503 errors)
+      const sim2d = await getSimilarityNeighbors(sourceCid);
+      const sub = await getSubstructureNeighbors(sourceCid);
+      const superstruct = await getSuperstructureNeighbors(sourceCid);
+      const sim3d = await get3DSimilarityNeighbors(sourceCid);
 
       const combined = aggregateNeighbors(sim2d, sub, superstruct, sim3d);
       setAlternatives(combined);

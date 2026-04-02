@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowUp, Sparkles, LayoutGrid, Command, Search as SearchIcon, Shield, TrendingUp, Menu, X, History, ChevronRight, FileText, Database, Activity } from "lucide-react";
+import { ArrowUp, Sparkles, LayoutGrid, Command, Search as SearchIcon, Shield, TrendingUp, Menu, X, History, ChevronRight, FileText, Database, Activity, FlaskConical, MessageCircle } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { LiquidBackground } from "@/components/LiquidBackground";
 import { ShaderButton } from "@/components/ui/ShaderButton";
@@ -51,6 +51,26 @@ export default function SearchPage() {
   const [error, setError] = useState<string | null>(null);
   const [inputFocused, setInputFocused] = useState(false);
 
+  // Detect if input looks like a natural language prompt vs a molecule name
+  const isPromptMode = (() => {
+    const text = query.trim();
+    if (!text || molecules.length > 0) return false;
+    const words = text.split(/\s+/);
+    // Single word is always molecule mode (e.g. "Aspirin", "Metformin")
+    if (words.length === 1) return false;
+    // 2+ words: check for known multi-word drug patterns first
+    // Common multi-word drug names: "Valproic Acid", "Folic Acid", "Vitamin D"
+    if (words.length === 2 && /^(acid|oxide|sulfate|chloride|citrate|sodium|calcium|hydrochloride|tartrate|phosphate|succinate|maleate|fumarate|mesylate|besylate|bromide|nitrate|acetate)$/i.test(words[1])) return false;
+    // 2+ words with NL patterns → prompt mode
+    if (words.length >= 2) {
+      const nlPatterns = /\b(find|search|what|which|how|is there|show|suggest|recommend|explore|discover|treat|treatment|cure|drug|molecule|medicine|therapy|repurpos|candidate|disease|condition|patient|symptom|disorder|syndrome|cancer|diabetes|alzheimer|parkinson|for)\b/i;
+      if (nlPatterns.test(text)) return true;
+    }
+    // 3+ words is almost always a prompt
+    if (words.length >= 3) return true;
+    return false;
+  })();
+
   // Auto-dismiss error after 5 seconds
   useEffect(() => {
     if (!error) return;
@@ -88,9 +108,9 @@ export default function SearchPage() {
   }, [isHistoryOpen]);
 
   useEffect(() => {
-    if (query.length < 2) {
+    if (query.length < 2 || isPromptMode) {
       setSuggestions([]);
-      setError(null);
+      if (query.length < 2) setError(null);
       return;
     }
     const timer = setTimeout(async () => {
@@ -105,7 +125,7 @@ export default function SearchPage() {
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, isPromptMode]);
 
   const addMolecule = (name: string) => {
     const trimmed = name.trim();
@@ -121,11 +141,48 @@ export default function SearchPage() {
     setMolecules(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleAnalyze = async () => {
-    // Collect all molecules: chips + current typed text
+  const handleAnalyze = async (overridePrompt?: string) => {
+    const trimmedQuery = overridePrompt?.trim() || query.trim();
+
+    // Detect prompt mode for the actual text being submitted
+    const textIsPrompt = (() => {
+      if (!trimmedQuery || molecules.length > 0) return false;
+      const words = trimmedQuery.split(/\s+/);
+      if (words.length === 1) return false;
+      if (words.length === 2 && /^(acid|oxide|sulfate|chloride|citrate|sodium|calcium|hydrochloride|tartrate|phosphate|succinate|maleate|fumarate|mesylate|besylate|bromide|nitrate|acetate)$/i.test(words[1])) return false;
+      if (words.length >= 2) {
+        const nlPatterns = /\b(find|search|what|which|how|is there|show|suggest|recommend|explore|discover|treat|treatment|cure|drug|molecule|medicine|therapy|repurpos|candidate|disease|condition|patient|symptom|disorder|syndrome|cancer|diabetes|alzheimer|parkinson|for)\b/i;
+        if (nlPatterns.test(trimmedQuery)) return true;
+      }
+      if (words.length >= 3) return true;
+      return false;
+    })();
+
+    // Prompt mode: send as { prompt } — no chips needed
+    if (textIsPrompt && trimmedQuery && molecules.length === 0) {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ prompt: trimmedQuery }),
+        });
+        const data = await res.json();
+        if (!res.ok) { setError(data.error || "Failed to resolve your query."); setLoading(false); return; }
+        if (data.job_id) navigate(`/progress/${data.job_id}`);
+      } catch (e) {
+        setError("Network error occurred. Please try again.");
+        setLoading(false);
+      }
+      return;
+    }
+
+    // Molecule mode: collect chips + current typed text
     const allMolecules = [...molecules];
-    if (query.trim() && !allMolecules.some(m => m.toLowerCase() === query.trim().toLowerCase())) {
-      allMolecules.push(query.trim());
+    if (trimmedQuery && !allMolecules.some(m => m.toLowerCase() === trimmedQuery.toLowerCase())) {
+      allMolecules.push(trimmedQuery);
     }
     if (allMolecules.length === 0) return;
 
@@ -139,11 +196,13 @@ export default function SearchPage() {
           fetch("/api/analyze", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            credentials: "include",
             body: JSON.stringify({ molecule: allMolecules[0] }),
           }),
           fetch("/api/analyze", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            credentials: "include",
             body: JSON.stringify({ molecule: allMolecules[1] }),
           }),
         ]);
@@ -160,6 +219,7 @@ export default function SearchPage() {
         const res = await fetch("/api/analyze", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({ molecule: allMolecules[0] }),
         });
         const data = await res.json();
@@ -351,7 +411,10 @@ export default function SearchPage() {
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
-                    if (query.trim() && molecules.length < 2) {
+                    if (isPromptMode) {
+                      e.preventDefault();
+                      handleAnalyze();
+                    } else if (query.trim() && molecules.length < 2) {
                       e.preventDefault();
                       addMolecule(query);
                     }
@@ -367,7 +430,7 @@ export default function SearchPage() {
                 onFocus={() => setInputFocused(true)}
                 onBlur={() => setTimeout(() => setInputFocused(false), 200)}
                 disabled={loading}
-                placeholder={molecules.length === 0 ? "Search molecules, targets, or mechanisms..." : molecules.length < 2 ? "Add another to compare..." : ""}
+                placeholder={molecules.length === 0 ? "Enter a molecule name or describe what you're looking for..." : molecules.length < 2 ? "Add another to compare..." : ""}
                 className="flex-1 min-w-[120px] bg-transparent text-base text-zinc-100 placeholder:text-zinc-400 focus:outline-none py-1"
               />
             )}
@@ -393,6 +456,25 @@ export default function SearchPage() {
             </div>
           </div>
 
+          {/* Mode indicator */}
+          <AnimatePresence mode="wait">
+            {query.trim().length >= 2 && molecules.length === 0 && (
+              <motion.div
+                key={isPromptMode ? 'prompt' : 'molecule'}
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -5 }}
+                className="flex items-center gap-1.5 px-2 text-xs"
+              >
+                {isPromptMode ? (
+                  <><MessageCircle size={12} className="text-violet-400" /><span className="text-violet-400/80">AI will find the best molecule for your query</span></>
+                ) : (
+                  <><FlaskConical size={12} className="text-cyan-400" /><span className="text-cyan-400/80">Molecule lookup</span></>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Hint text */}
           {molecules.length === 1 && !query && (
             <motion.p
@@ -402,6 +484,40 @@ export default function SearchPage() {
             >
               Type another molecule to compare, or click the arrow to analyze
             </motion.p>
+          )}
+
+          {/* Example prompt chips */}
+          {molecules.length === 0 && !query && !loading && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className="flex flex-wrap gap-2 px-1 mt-1"
+            >
+              {[
+                'Find a repurposing candidate for Parkinson\'s',
+                'Drug for Alzheimer\'s disease',
+                'Metformin',
+                'Treatment for lupus',
+              ].map((example) => (
+                <button
+                  key={example}
+                  onClick={() => {
+                    if (example.includes(' ')) {
+                      // Multi-word: submit directly as prompt
+                      setQuery(example);
+                      handleAnalyze(example);
+                    } else {
+                      // Single word molecule: add as chip
+                      addMolecule(example);
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded-full border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800/80 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+                >
+                  {example}
+                </button>
+              ))}
+            </motion.div>
           )}
 
           {/* Autocomplete suggestions */}

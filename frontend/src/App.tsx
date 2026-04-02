@@ -16,6 +16,7 @@ const CommunityPage = lazy(() => import('./pages/CommunityPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
 const SignupPage = lazy(() => import('./pages/SignupPage').then(m => ({ default: m.SignupPage })));
 const ProfilePage = lazy(() => import('./pages/ProfilePage').then(m => ({ default: m.ProfilePage })));
+const PricingPage = lazy(() => import('./pages/PricingPage').then(m => ({ default: m.PricingPage })));
 const SharedReportPage = lazy(() => import('./pages/SharedReportPage'));
 
 // A simple fallback for Suspense
@@ -95,6 +96,14 @@ export default function App() {
                     element={
                       <ProtectedRoute>
                         <ProfilePage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/pricing"
+                    element={
+                      <ProtectedRoute>
+                        <PricingPage />
                       </ProtectedRoute>
                     }
                   />

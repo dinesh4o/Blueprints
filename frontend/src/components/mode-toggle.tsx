@@ -77,12 +77,12 @@ export function ModeToggle() {
                     <span>Edit Profile</span>
                   </DropdownMenuItem>
                   {(!user.plan || user.plan === 'free') ? (
-                    <DropdownMenuItem onClick={() => navigate('/profile?tab=settings')} className="rounded-lg cursor-pointer">
+                    <DropdownMenuItem onClick={() => navigate('/pricing')} className="rounded-lg cursor-pointer">
                       <Zap className="mr-2 h-4 w-4 text-amber-400" />
                       <span>Explore Plans</span>
                     </DropdownMenuItem>
                   ) : (
-                    <DropdownMenuItem onClick={() => navigate('/profile?tab=settings')} className="rounded-lg cursor-pointer">
+                    <DropdownMenuItem onClick={() => navigate('/pricing')} className="rounded-lg cursor-pointer">
                       <Crown className={`mr-2 h-4 w-4 ${user.plan === 'organization' ? 'text-purple-400' : 'text-amber-400'}`} />
                       <span className={`text-sm font-medium capitalize ${user.plan === 'organization' ? 'text-purple-400' : 'text-amber-400'}`}>{user.plan} Plan</span>
                     </DropdownMenuItem>

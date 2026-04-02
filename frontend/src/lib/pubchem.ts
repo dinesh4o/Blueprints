@@ -36,10 +36,11 @@ export async function fetchWithRetry(url: string, retries = 3): Promise<Response
       const response = await fetch(url);
       if (response.ok) return response;
       if (response.status === 404) return response; // Not found might be expected
-      await new Promise(r => setTimeout(r, 1000 * (i + 1))); // Exponential backoff
+      // PubChem rate-limits aggressively; use longer backoff
+      await new Promise(r => setTimeout(r, 1500 * (i + 1)));
     } catch (err) {
       if (i === retries - 1) throw err;
-      await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+      await new Promise(r => setTimeout(r, 1500 * (i + 1)));
     }
   }
   throw new Error(`Failed to fetch ${url} after ${retries} retries`);

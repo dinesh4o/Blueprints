@@ -10,7 +10,7 @@
  *   C) Pathway Overlap Panel (SVG node-edge graph: Drug → Target → Disease)
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronDown, ChevronRight, ExternalLink, Activity, TrendingUp,
@@ -20,6 +20,8 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { clsx } from 'clsx';
+
+const InteractivePathway = lazy(() => import('@/components/InteractivePathway').then(m => ({ default: m.default })));
 
 // ─────────────────────────────────────────────
 // Score helpers
@@ -46,205 +48,6 @@ function scoreLabel(score: number) {
   if (score >= 8) return 'High Opportunity';
   if (score >= 6) return 'Moderate Opportunity';
   return 'Low Opportunity';
-}
-
-// ─────────────────────────────────────────────
-// Pathway Overlap SVG Panel
-// ─────────────────────────────────────────────
-
-interface PathwayNode { id: string; label: string; type: 'drug' | 'target' | 'disease'; x: number; y: number; }
-interface PathwayEdge { from: string; to: string; label?: string; }
-
-function PathwayOverlapPanel({ report }: { report: any }) {
-  const pd = report.pubchem_data || {};
-  const drugName  = report.molecule || 'Compound';
-
-  // Extract targets/pathways from mechanism_of_action text
-  const mechText: string = pd.mechanism_of_action || pd.pharmacology || '';
-  const rawTargets: string[] = [];
-  const bioTermPattern = /([A-Z][A-Za-z0-9-]{2,20}(?:\s+(?:kinase|receptor|pathway|inhibitor|activator|transporter|channel|protein|enzyme|complex))?)/g;
-  let m: RegExpExecArray | null;
-  while ((m = bioTermPattern.exec(mechText)) !== null && rawTargets.length < 5) {
-    const term = m[1].trim();
-    if (term.length > 3 && !['This', 'The', 'For', 'It ', 'Its'].includes(term.substring(0, 3))) {
-      rawTargets.push(term);
-    }
-  }
-  const targets = rawTargets.length > 0 ? rawTargets.slice(0, 5) : ['Primary Target'];
-
-  // Diseases from top candidates
-  const diseases = (report.repurposing_candidates || []).slice(0, 6).map((c: any) => c.condition);
-
-  // Layout — canvas: 1150 x 825
-  const CX = 575, CY = 412, R_TARGET = 200, R_DISEASE = 395;
-  const targetAngle = (i: number) => ((2 * Math.PI) / targets.length) * i - Math.PI / 2;
-  const diseaseAngle = (i: number) => ((2 * Math.PI) / Math.max(diseases.length, 1)) * i - Math.PI / 2;
-
-  const nodes: PathwayNode[] = [
-    { id: 'drug', label: drugName, type: 'drug', x: CX, y: CY },
-    ...targets.map((t, i) => ({
-      id: `t${i}`, label: t, type: 'target' as const,
-      x: CX + R_TARGET * Math.cos(targetAngle(i)),
-      y: CY + R_TARGET * Math.sin(targetAngle(i)),
-    })),
-    ...diseases.map((d: string, i: number) => ({
-      id: `d${i}`, label: d, type: 'disease' as const,
-      x: CX + R_DISEASE * Math.cos(diseaseAngle(i)),
-      y: CY + R_DISEASE * Math.sin(diseaseAngle(i)),
-    })),
-  ];
-
-  const edges: PathwayEdge[] = [
-    ...targets.map((_, i) => ({ from: 'drug', to: `t${i}` })),
-    ...diseases.map((_: string, di: number) => {
-      const ti = di % targets.length;
-      return { from: `t${ti}`, to: `d${di}` };
-    }),
-  ];
-
-  const nodeByid = Object.fromEntries(nodes.map(n => [n.id, n]));
-
-  return (
-    <div className="bg-[#0c0c10] border border-[#27272a] rounded-2xl p-6 overflow-hidden">
-      <h3 className="text-base font-medium text-zinc-100 mb-5 flex items-center gap-2">
-        <Network className="w-4 h-4 text-cyan-400" />
-        Pathway Overlap
-      </h3>
-      <div className="w-full overflow-x-auto pb-4">
-        <div className="max-w-[72rem] mx-auto">
-          <svg viewBox="0 0 1150 825" className="w-full h-auto">
-          <defs>
-            {/* Arrowhead marker for drug→target edges */}
-            <marker id="arrow-cyan" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-              <path d="M0,0 L0,6 L8,3 z" fill="#06b6d4" />
-            </marker>
-            {/* Arrowhead marker for target→disease edges */}
-            <marker id="arrow-slate" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-              <path d="M0,0 L0,6 L8,3 z" fill="#475569" />
-            </marker>
-            {/* Glow filters */}
-            <filter id="glow-drug" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="6" result="blur" />
-              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-            </filter>
-            <filter id="glow-target" x="-40%" y="-40%" width="180%" height="180%">
-              <feGaussianBlur stdDeviation="3" result="blur" />
-              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-            </filter>
-            <radialGradient id="drug-grad" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="#818cf8" />
-              <stop offset="100%" stopColor="#4f46e5" />
-            </radialGradient>
-            <radialGradient id="drug-halo" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.35" />
-              <stop offset="100%" stopColor="#06b6d4" stopOpacity="0" />
-            </radialGradient>
-          </defs>
-
-          {/* ── Edges ── */}
-          {edges.map((edge, i) => {
-            const a = nodeByid[edge.from];
-            const b = nodeByid[edge.to];
-            if (!a || !b) return null;
-            const isTargetEdge = edge.from === 'drug';
-
-            // Shorten line slightly so arrowhead lands before the circle edge
-            const dx = b.x - a.x, dy = b.y - a.y;
-            const len = Math.sqrt(dx * dx + dy * dy);
-            const shrink = isTargetEdge ? 24 : 16;   // target radius + margin
-            const ex = b.x - (dx / len) * shrink;
-            const ey = b.y - (dy / len) * shrink;
-
-            return (
-              <line
-                key={i}
-                x1={a.x} y1={a.y} x2={ex} y2={ey}
-                stroke={isTargetEdge ? '#06b6d4' : '#475569'}
-                strokeWidth={isTargetEdge ? 2.5 : 1.8}
-                strokeDasharray={isTargetEdge ? '' : '6 4'}
-                strokeOpacity={isTargetEdge ? 0.85 : 0.7}
-                markerEnd={isTargetEdge ? 'url(#arrow-cyan)' : 'url(#arrow-slate)'}
-              />
-            );
-          })}
-
-          {/* ── Nodes ── */}
-          {nodes.map(node => {
-            if (node.type === 'drug') return (
-              <g key={node.id} filter="url(#glow-drug)">
-                {/* Outer halo */}
-                <circle cx={node.x} cy={node.y} r={56} fill="url(#drug-halo)" />
-                {/* Main circle */}
-                <circle cx={node.x} cy={node.y} r={42} fill="#083344" stroke="#06b6d4" strokeWidth={2.5} />
-                {/* Inner gradient fill */}
-                <circle cx={node.x} cy={node.y} r={38} fill="url(#drug-grad)" fillOpacity={0.15} />
-                <text x={node.x} y={node.y - 8} textAnchor="middle" fontSize={9} fill="#a5b4fc" fontWeight="bold" letterSpacing="0.5">DRUG</text>
-                <text x={node.x} y={node.y + 8} textAnchor="middle" fontSize={10} fill="#e2e8f0" fontWeight="700">
-                  {node.label.slice(0, 12)}{node.label.length > 12 ? '…' : ''}
-                </text>
-              </g>
-            );
-            if (node.type === 'target') return (
-              <g key={node.id} filter="url(#glow-target)">
-                <circle cx={node.x} cy={node.y} r={26} fill="#1a1a2e" stroke="#4f46e5" strokeWidth={2} />
-                <circle cx={node.x} cy={node.y} r={22} fill="#312e81" fillOpacity={0.25} />
-                <text x={node.x} y={node.y + 38} textAnchor="middle" fontSize={8} fill="#e2e8f0" fontWeight="600" stroke="#0c0c10" strokeWidth="3" paintOrder="stroke">
-                  {node.label.slice(0, 16)}{node.label.length > 16 ? '…' : ''}
-                </text>
-                <text x={node.x} y={node.y + 38} textAnchor="middle" fontSize={8} fill="#94a3b8" fontWeight="600">
-                  {node.label.slice(0, 16)}{node.label.length > 16 ? '…' : ''}
-                </text>
-              </g>
-            );
-            // disease node
-            const line1 = node.label.slice(0, 12);
-            const line2 = node.label.length > 12 ? node.label.slice(12, 24) + (node.label.length > 24 ? '…' : '') : '';
-            return (
-              <g key={node.id}>
-                <circle cx={node.x} cy={node.y} r={20} fill="#0f172a" stroke="#334155" strokeWidth={1.5} />
-                {/* Background for text readability */}
-                <rect x={node.x - 30} y={node.y - 8} width={60} height={line2 ? 20 : 12} fill="#0c0c10" fillOpacity="0.8" rx="2" />
-                <text x={node.x} y={node.y} textAnchor="middle" fontSize={7} fill="#e2e8f0" fontWeight="500">
-                  {line1}
-                </text>
-                {line2 && (
-                  <text x={node.x} y={node.y + 9} textAnchor="middle" fontSize={6.5} fill="#94a3b8" fontWeight="400">
-                    {line2}
-                  </text>
-                )}
-              </g>
-            );
-          })}
-        </svg>
-        </div>
-      </div>
-
-      {/* Legend */}
-      <div className="flex justify-center items-center gap-6 mt-3 text-xs text-zinc-500">
-        <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 inline-block" /> Drug
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full border border-cyan-500 bg-cyan-900/40 inline-block" /> Target / Pathway
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-zinc-800 border border-slate-600 inline-block" /> Disease
-        </span>
-        <span className="flex items-center gap-2 ml-auto">
-          <span className="inline-block w-6 border-t-2 border-cyan-500" /> Direct link
-        </span>
-        <span className="flex items-center gap-2">
-          <span className="inline-block w-6 border-t border-dashed border-slate-500" /> Indirect link
-        </span>
-      </div>
-
-      {mechText && (
-        <p className="text-xs text-zinc-600 mt-3 leading-relaxed border-t border-zinc-800/50 pt-3">
-          <span className="text-zinc-500 font-medium">Mechanism source: </span>PubChem pharmacology data
-        </p>
-      )}
-    </div>
-  );
 }
 
 // ─────────────────────────────────────────────
@@ -768,8 +571,10 @@ export function AISynthesisTab({ report, setActiveSidebar }: { report: any; setA
           <Network className="w-4 h-4 text-cyan-400" /> Mechanistic Pathway Overlap
         </h3>
 
-        {/* Full-width graph */}
-        <PathwayOverlapPanel report={report} />
+        {/* Full-width interactive D3 force graph */}
+        <Suspense fallback={<div className="h-[500px] bg-[#0c0c10] border border-[#27272a] rounded-2xl animate-pulse" />}>
+          <InteractivePathway report={report} />
+        </Suspense>
 
         {/* Compact interpretation strip below */}
         <div className="mt-4 bg-[#121214] border border-[#27272a] rounded-xl px-5 py-4">

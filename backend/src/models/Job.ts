@@ -2,6 +2,9 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IJob extends Document {
   molecule: string;
+  prompt?: string;
+  resolvedFrom?: string;
+  selectionMeta?: any;
   userId: mongoose.Types.ObjectId;
   status: 'pending' | 'processing' | 'completed' | 'failed';
   currentStep: string;
@@ -15,6 +18,9 @@ export interface IJob extends Document {
 const JobSchema = new Schema<IJob>(
   {
     molecule: { type: String, required: true },
+    prompt: { type: String },
+    resolvedFrom: { type: String },
+    selectionMeta: { type: Schema.Types.Mixed },
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: false },
     status: {
       type: String,

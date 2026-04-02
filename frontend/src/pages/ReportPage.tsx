@@ -23,12 +23,12 @@ import { RepurposingAlternativeFinder } from '@/components/RepurposingAlternativ
 import { SourceBadge } from '@/components/SourceBadge';
 import SafetyHeatmap from '@/components/SafetyHeatmap';
 import IndicationMatrix from '@/components/IndicationMatrix';
-import KOLNetwork from '@/components/KOLNetwork';
-import TopInvestigators from '@/components/TopInvestigators';
 import { KnowledgeGraph } from '@/components/KnowledgeGraph';
 import { RiskRadar } from '@/components/RiskRadar';
-import { AIEvidenceChain } from '@/components/AIEvidenceChain';
+import { RepurposingVerdict } from '@/components/RepurposingVerdict';
 import RegulatoryPathway from '@/components/RegulatoryPathway';
+import InvestorOverview from '@/components/InvestorOverview';
+import TrialTimeline from '@/components/TrialTimeline';
 import { AISynthesisTab } from './AISynthesisPage';
 import ReactMarkdown from 'react-markdown';
 import { exportResearchPaper } from '@/lib/ResearchPaperExport';
@@ -1093,8 +1093,8 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
         />
       </div>
 
-      {/* AI Evidence Chain */}
-      <AIEvidenceChain
+      {/* Repurposing Verdict */}
+      <RepurposingVerdict
         molecule={report.molecule}
         clinicalData={Array.isArray(report.clinical_data) ? report.clinical_data : []}
         literatureData={Array.isArray(report.literature_data) ? report.literature_data : []}
@@ -1319,21 +1319,10 @@ const ScienceTab = ({ report, setActiveSidebar }: any) => {
         </div>
       )}
 
-      {/* KOL Network — Co-authorship Graph */}
-      {(report.literature_data || []).length > 0 && (
+      {/* Clinical Trial Timeline — Gantt-style visualization */}
+      {(report.clinical_data || []).length > 0 && (
         <div className="mb-10">
-          <h3 className="text-xl font-medium text-zinc-100 mb-6 flex items-center gap-2">
-            <Network className="w-5 h-5 text-cyan-400" /> Key Opinion Leader Network
-            <SourceBadge api="PubMed" endpoint="eutils.ncbi.nlm.nih.gov/entrez/eutils" url="https://pubmed.ncbi.nlm.nih.gov" confidence="High" note="Co-authorship force-directed graph from PubMed literature" />
-          </h3>
-          <KOLNetwork literatureData={report.literature_data} />
-        </div>
-      )}
-
-      {/* Top Investigators */}
-      {(report.literature_data || []).length > 0 && (
-        <div className="mb-10">
-          <TopInvestigators literatureData={report.literature_data} />
+          <TrialTimeline trials={report.clinical_data} drugName={report.molecule || 'Compound'} />
         </div>
       )}
 
@@ -1718,7 +1707,16 @@ export default function ReportPage() {
   const [currency, setCurrency] = useState<'USD' | 'INR'>('INR');
   const [structureMode, setStructureMode] = useState<'2d' | '3d'>('2d');
   const [compareMolecule, setCompareMolecule] = useState<'A' | 'B'>('A');
+  const [twinVisited, setTwinVisited] = useState(false);
   const [activeSidebar, setActiveSidebar] = useState<'ai' | 'refs' | null>(null);
+  const [viewMode, setViewMode] = useState<'scientist' | 'investor'>('scientist');
+
+  // Track when twin tab is first visited so we can lazy-mount it
+  useEffect(() => {
+    if (activeTab === 'twin' && !twinVisited) {
+      setTwinVisited(true);
+    }
+  }, [activeTab, twinVisited]);
   const [sidebarWidth, setSidebarWidth] = useState(400);
 
   const startResizing = React.useCallback((mouseDownEvent: React.MouseEvent) => {
@@ -1983,12 +1981,39 @@ export default function ReportPage() {
                   <ArrowLeft size={16} className="mr-1 inline" /> Back to Search
                 </Button>
               </div>
-              <h1 className="text-lg font-semibold text-zinc-100 tracking-tight">
-                {compareReport
-                  ? <>{report.molecule} <span className="text-zinc-500 font-normal mx-1">vs</span> {compareReport.molecule}</>
-                  : <>{report.molecule} Analysis Report</>
-                }
-              </h1>
+              <div className="flex items-center gap-2.5">
+                <h1 className="text-lg font-semibold text-zinc-100 tracking-tight">
+                  {compareReport
+                    ? <>{report.molecule} <span className="text-zinc-500 font-normal mx-1">vs</span> {compareReport.molecule}</>
+                    : <>{report.molecule} Analysis Report</>
+                  }
+                </h1>
+                <button
+                  onClick={async () => {
+                    if (!id || shareState !== 'idle') return;
+                    setShareState('loading');
+                    try {
+                      const res = await fetch(`/api/reports/${id}/share`, { method: 'POST' });
+                      const data = await res.json();
+                      if (data.shareToken) {
+                        const url = `${window.location.origin}/shared/${data.shareToken}`;
+                        await navigator.clipboard.writeText(url);
+                        setShareState('copied');
+                        setTimeout(() => setShareState('idle'), 2500);
+                      }
+                    } catch { setShareState('idle'); }
+                  }}
+                  title={shareState === 'copied' ? 'Link copied!' : 'Share report'}
+                  className={clsx(
+                    'p-1.5 rounded-lg transition-colors',
+                    shareState === 'copied' ? 'text-emerald-400' : 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/60'
+                  )}
+                >
+                  {shareState === 'loading' ? <Loader2 size={16} className="animate-spin" />
+                    : shareState === 'copied' ? <Check size={16} />
+                    : <Share2 size={16} />}
+                </button>
+              </div>
               <div className="flex items-center gap-2 mt-1 text-xs font-medium text-zinc-500">
                 <span onClick={() => navigate('/search')} className="hover:text-zinc-300 cursor-pointer transition-colors">Search</span>
                 <span className="text-zinc-700">/</span>
@@ -2013,27 +2038,18 @@ export default function ReportPage() {
                 </div>
                 <span>Ask</span>
               </button>
-              <button
-                onClick={async () => {
-                  if (!id || shareState !== 'idle') return;
-                  setShareState('loading');
-                  try {
-                    const res = await fetch(`/api/reports/${id}/share`, { method: 'POST' });
-                    const data = await res.json();
-                    if (data.shareToken) {
-                      const url = `${window.location.origin}/shared/${data.shareToken}`;
-                      await navigator.clipboard.writeText(url);
-                      setShareState('copied');
-                      setTimeout(() => setShareState('idle'), 2500);
-                    }
-                  } catch { setShareState('idle'); }
-                }}
-                className="flex items-center gap-2 px-3.5 py-2 hover:bg-white/20 text-white rounded-full transition-colors border border-zinc-700 text-sm font-medium">
-                {shareState === 'loading' ? <Loader2 size={14} className="animate-spin" />
-                  : shareState === 'copied' ? <Check size={14} className="text-emerald-400" />
-                  : <Share2 size={14} />}
-                <span>{shareState === 'copied' ? 'Link Copied!' : 'Share'}</span>
-              </button>
+
+              {/* Scientist / Investor view mode toggle */}
+              <div className="inline-flex items-center bg-zinc-900/80 border border-zinc-700 rounded-full p-0.5 gap-0.5">
+                <button onClick={() => setViewMode('scientist')}
+                  className={clsx('flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all', viewMode === 'scientist' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-lg shadow-cyan-500/10' : 'text-zinc-500 hover:text-zinc-300 border border-transparent')}>
+                  <Beaker size={14} /> Scientist
+                </button>
+                <button onClick={() => setViewMode('investor')}
+                  className={clsx('flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all', viewMode === 'investor' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-lg shadow-emerald-500/10' : 'text-zinc-500 hover:text-zinc-300 border border-transparent')}>
+                  <DollarSign size={14} /> Investor
+                </button>
+              </div>
               <button onClick={handleExportPdf} disabled={isExportingPdf}
                 className="flex items-center gap-2 px-3.5 py-2 bg-zinc-100 hover:bg-white text-zinc-900 rounded-lg transition-colors disabled:opacity-50 border-none text-sm font-medium">
                 {isExportingPdf ? <Loader2 size={16} className="animate-spin" /> : <Download className="w-4 h-4" />}
@@ -2082,6 +2098,8 @@ export default function ReportPage() {
             <div className={activeTab === 'overview' ? '' : 'hidden'}>
               {compareReport ? (
                 <CompareView reportA={report} reportB={compareReport} formatMarketSize={formatMarketSize} />
+              ) : viewMode === 'investor' ? (
+                <InvestorOverview report={report} formatMarketSize={formatMarketSize} />
               ) : (
                 <OverviewTab report={report} onStartSimulation={() => setShowSimulation(true)} structureMode={structureMode} setStructureMode={setStructureMode} setActiveSidebar={setActiveSidebar} />
               )}
@@ -2113,7 +2131,8 @@ export default function ReportPage() {
               <MarketTab report={compareReport && compareMolecule === 'B' ? compareReport : report} currency={currency} formatMarketSize={formatMarketSize} />
             </div>
 
-            {/* Twin tab */}
+            {/* Twin tab — lazy mount to avoid PubChem rate limits on page load */}
+            {(activeTab === 'twin' || twinVisited) && (
             <div className={activeTab === 'twin' ? 'animate-in fade-in duration-500 w-full mx-auto' : 'hidden'}>
               {(() => {
                 const activeReport = compareReport && compareMolecule === 'B' ? compareReport : report;
@@ -2136,6 +2155,7 @@ export default function ReportPage() {
                 );
               })()}
             </div>
+            )}
 
             {/* Synthesis tab */}
             <div className={activeTab === 'synthesis' ? '' : 'hidden'}>

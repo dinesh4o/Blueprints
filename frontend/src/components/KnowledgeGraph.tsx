@@ -146,9 +146,9 @@ export function KnowledgeGraph({ drugName, data }: KnowledgeGraphProps) {
       .selectAll('line')
       .data(links)
       .join('line')
-      .attr('stroke', '#3f3f46')
-      .attr('stroke-width', (d: any) => Math.max(0.5, d.strength * 2))
-      .attr('stroke-opacity', 0.4)
+      .attr('stroke', '#71717a')
+      .attr('stroke-width', (d: any) => Math.max(1, d.strength * 3))
+      .attr('stroke-opacity', 0.6)
       .attr('stroke-dasharray', '4 2');
 
     // Animated particles along links

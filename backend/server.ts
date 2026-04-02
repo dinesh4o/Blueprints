@@ -147,6 +147,8 @@ const DISEASE_SYNONYMS: Record<string, string> = {
   "alzheimer's": 'alzheimer disease',
   'alzheimers disease': 'alzheimer disease',
   'alzheimer disease': 'alzheimer disease',
+  'dementia of the alzheimer type': 'alzheimer disease',
+  'dementia of alzheimer type': 'alzheimer disease',
   // Liver disease
   'nafld': 'non-alcoholic fatty liver disease',
   'nash': 'non-alcoholic steatohepatitis',
@@ -294,7 +296,7 @@ function buildRepurposingCandidates(clinicalData: any[], marketData: Record<stri
       };
     })
     .sort((a, b) => b.repurposing_score - a.repurposing_score)
-    .slice(0, 8);
+    .slice(0, 12);
 }
 
 async function startServer() {
@@ -371,23 +373,60 @@ async function startServer() {
   });
 
   app.post('/api/analyze', async (req, res) => {
-    const { molecule } = req.body;
-    if (!molecule) {
-      return res.status(400).json({ error: 'Molecule name is required' });
+    const { molecule: rawMolecule, prompt } = req.body;
+    
+    let molecule: string;
+    let resolvedFrom: string | undefined;
+    let promptText: string | undefined;
+    let selectionMeta: any;
+
+    if (prompt && typeof prompt === 'string' && prompt.trim()) {
+      // Natural language prompt mode — resolve to a molecule via LLM
+      promptText = prompt.trim();
+      try {
+        const resolution = await resolvePromptToMolecule(promptText);
+        molecule = resolution.molecule;
+        resolvedFrom = resolution.reasoning;
+        selectionMeta = resolution.selectionMeta;
+        console.log(`[Analyze] Prompt "${promptText}" → resolved to "${molecule}" (${resolvedFrom})`);
+      } catch (err: any) {
+        return res.status(400).json({ error: err.message || 'Failed to resolve your query to a molecule. Try entering a specific drug name.' });
+      }
+    } else if (rawMolecule && typeof rawMolecule === 'string' && rawMolecule.trim()) {
+      // Direct molecule mode — validate as a pharmaceutical molecule
+      molecule = rawMolecule.trim();
+      const isReal = await validateMolecule(molecule);
+      if (!isReal) {
+        // If it looks like a multi-word query, try resolving as a prompt before rejecting
+        const wordCount = molecule.split(/\s+/).length;
+        if (wordCount >= 2) {
+          try {
+            const resolution = await resolvePromptToMolecule(molecule);
+            molecule = resolution.molecule;
+            resolvedFrom = resolution.reasoning;
+            selectionMeta = resolution.selectionMeta;
+            promptText = rawMolecule.trim();
+            console.log(`[Analyze] Fallback prompt resolution: "${promptText}" → "${molecule}" (${resolvedFrom})`);
+          } catch (err: any) {
+            return res.status(400).json({ error: `"${rawMolecule.trim()}" isn't recognized as a valid pharmaceutical molecule and couldn't be resolved. Try a valid drug name like Aspirin, Metformin, or Ibuprofen.` });
+          }
+        } else {
+          return res.status(400).json({ error: `"${molecule}" isn't recognized as a valid pharmaceutical molecule. Try a valid drug name like Aspirin, Metformin, or Ibuprofen.` });
+        }
+      }
+    } else {
+      return res.status(400).json({ error: 'Please enter a molecule name or describe what you\'re looking for.' });
     }
 
-    // Very early validation before creating jobs
-    const isReal = await validateMolecule(molecule);
-    if (!isReal) {
-      return res.status(400).json({ error: `"${molecule}" wasn't found in PubChem or ClinicalTrials.gov. Try a valid drug name like Aspirin, Metformin, or Ibuprofen.` });
-    }
-
-    let jobId = crypto.randomUUID();
+    let jobId: string = crypto.randomUUID();
     
     // Save to DB so we have a persistent history record
     try {
       const newJob = await Job.create({
         molecule,
+        prompt: promptText,
+        resolvedFrom,
+        selectionMeta,
         userId: req.user ? (req.user as any)._id : undefined,
         status: 'processing',
         currentStep: 'Initializing...',
@@ -400,6 +439,9 @@ async function startServer() {
     jobs.set(jobId, {
       id: jobId,
       molecule,
+      prompt: promptText,
+      resolvedFrom,
+      selectionMeta,
       status: 'running',
       steps: [
         { name: 'PubChemAgent', label: 'PubChem Verify', status: 'running', log: 'Initializing...' },
@@ -424,7 +466,7 @@ async function startServer() {
       }
     });
 
-    res.json({ job_id: jobId });
+    res.json({ job_id: jobId, molecule, resolvedFrom, selectionMeta });
   });
 
   app.get('/api/status/:id', (req, res) => {
@@ -649,26 +691,936 @@ async function startServer() {
       res.end();
     }
   });
-  async function validateMolecule(name: string): Promise<boolean> {
-    // Primary check: PubChem compound lookup — the gold standard for molecule validation
+  function normalizeDrugTerm(s: string): string {
+    return s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  }
+
+  function matchesDrugTerm(candidate: string, term: string): boolean {
+    const c = normalizeDrugTerm(candidate);
+    const t = normalizeDrugTerm(term);
+    if (!c || !t) return false;
+    return c === t || c.startsWith(`${t} `);
+  }
+
+  async function hasOpenFDADrugLabelMatch(name: string): Promise<boolean> {
+    const term = name.trim();
+    if (!term) return false;
+
+    const queries = [
+      `openfda.generic_name:"${term}"`,
+      `openfda.brand_name:"${term}"`,
+      `openfda.substance_name:"${term}"`,
+    ];
+
+    for (const query of queries) {
+      try {
+        const url = `https://api.fda.gov/drug/label.json?search=${encodeURIComponent(query)}&limit=10`;
+        const res = await fetch(url, { signal: AbortSignal.timeout(7000) });
+        if (!res.ok) continue;
+        const data = await res.json() as any;
+        const results = Array.isArray(data?.results) ? data.results : [];
+
+        for (const row of results) {
+          const openfda = row?.openfda || {};
+          const candidates: string[] = [
+            ...(Array.isArray(openfda.generic_name) ? openfda.generic_name : []),
+            ...(Array.isArray(openfda.brand_name) ? openfda.brand_name : []),
+            ...(Array.isArray(openfda.substance_name) ? openfda.substance_name : []),
+          ];
+          if (candidates.some((c) => matchesDrugTerm(c, term))) {
+            return true;
+          }
+        }
+      } catch {}
+    }
+
+    return false;
+  }
+
+  async function hasAgrochemicalSynonym(cid: number): Promise<boolean> {
     try {
-      const res = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encodeURIComponent(name)}/cids/JSON`);
+      const res = await fetch(
+        `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/synonyms/JSON`,
+        { signal: AbortSignal.timeout(8000) }
+      );
+      if (!res.ok) return false;
+      const data = await res.json() as any;
+      const synonyms: string[] = data?.InformationList?.Information?.[0]?.Synonym || [];
+      const agroPattern = /\b(herbicide|insecticide|fungicide|pesticide|rodenticide)\b/i;
+      return synonyms.some((s) => agroPattern.test(s));
+    } catch {
+      return false;
+    }
+  }
+
+  async function validateMolecule(name: string): Promise<boolean> {
+    // Validation strategy:
+    // 1) Always require a PubChem compound match.
+    // 2) For simple single-word names (often ambiguous English words), require an
+    //    exact OpenFDA drug label match to avoid false positives like "cycle".
+    const raw = (name || '').trim();
+    if (!raw) return false;
+
+    let hasPubChemMatch = false;
+    let primaryCID: number | null = null;
+    try {
+      const res = await fetch(
+        `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encodeURIComponent(raw)}/cids/JSON`,
+        { signal: AbortSignal.timeout(10000) }
+      );
       if (res.ok) {
         const data = await res.json();
-        if (data?.IdentifierList?.CID?.length > 0) return true;
+        const cids = data?.IdentifierList?.CID || [];
+        hasPubChemMatch = cids.length > 0;
+        primaryCID = hasPubChemMatch ? Number(cids[0]) : null;
       }
     } catch {}
 
-    // Fallback: ClinicalTrials.gov — but ONLY match as an intervention (drug name),
-    // not query.term which matches conditions like "cancer", "diabetes", etc.
-    try {
-      const res = await fetch(`https://clinicaltrials.gov/api/v2/studies?query.intr=${encodeURIComponent(name)}&pageSize=1`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.studies?.length > 0) return true;
+    if (!hasPubChemMatch) return false;
+
+    if (primaryCID != null) {
+      const agrochemical = await hasAgrochemicalSynonym(primaryCID);
+      if (agrochemical) {
+        console.warn(`[Validate] Rejected "${raw}" (CID ${primaryCID}) due to agrochemical synonym markers.`);
+        return false;
       }
-    } catch {}
-    return false;
+    }
+
+    const isSimpleSingleWord = /^[A-Za-z]{3,20}$/.test(raw);
+    if (!isSimpleSingleWord) return true;
+
+    const hasDrugLabelMatch = await hasOpenFDADrugLabelMatch(raw);
+    if (!hasDrugLabelMatch) {
+      console.warn(`[Validate] Rejected ambiguous term "${raw}" (PubChem match but no OpenFDA drug label name match).`);
+      return false;
+    }
+
+    return true;
+  }
+
+  interface PromptConstraints {
+    requiresElderlySafety: boolean;
+    requiresOral: boolean;
+    requiresLowCost: boolean;
+    requiresLowPatentBarrier: boolean;
+  }
+
+  interface CandidateSuggestion {
+    molecule: string;
+    rationale: string;
+  }
+
+  interface OpenFDALabelProfile {
+    rows: any[];
+    indications: string[];
+    boxedWarnings: string[];
+    contraindications: string[];
+    routes: string[];
+    elderlyWarning: boolean;
+    hasGenericSignal: boolean;
+  }
+
+  interface CandidateEvaluation {
+    molecule: string;
+    rationale: string;
+    validMolecule: boolean;
+    approvedForTarget: boolean;
+    approvalEvidence?: string;
+    safetyScore: number;
+    patentScore: number;
+    clinicalScore: number;
+    affordabilityScore: number;
+    oralLikely: boolean | null;
+    totalScore: number;
+    eliminationRound?: number;
+    eliminationReason?: string;
+    evidence: {
+      trialCount: number;
+      latePhaseTrialCount: number;
+      patentCount: number | null;
+      boxedWarningCount: number;
+      elderlyWarning: boolean;
+      hasGenericSignal: boolean;
+    };
+  }
+
+  interface BracketEntry {
+    molecule: string;
+    status: 'advance' | 'eliminated';
+    reason?: string;
+  }
+
+  interface PromptResolutionMeta {
+    strategy: string;
+    targetDisease: string | null;
+    constraints: PromptConstraints;
+    winnerConfidence: number;
+    winnerScores: {
+      total: number;
+      safety: number;
+      patent: number;
+      clinical: number;
+      affordability: number;
+    };
+    runnerUps: Array<{ molecule: string; score: number; note: string }>;
+    eliminationBracket: {
+      round1: BracketEntry[];
+      round2: BracketEntry[];
+      round3: BracketEntry[];
+    };
+    killList: Array<{ molecule: string; reason: string }>;
+    fallbackUsed: boolean;
+    warning?: string;
+  }
+
+  interface PromptResolutionResult {
+    molecule: string;
+    reasoning: string;
+    selectionMeta?: PromptResolutionMeta;
+  }
+
+  function normalizeFreeText(s: string): string {
+    return (s || '')
+      .toLowerCase()
+      .replace(/[’']/g, '')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function canonicalizeDiseaseForApprovalMatch(raw: string): string {
+    const cleaned = (raw || '')
+      .toLowerCase()
+      .replace(/[’']/g, '')
+      .replace(/\b(early[-\s]?stage|late[-\s]?stage|mild|moderate|severe|advanced|initial)\b/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return normalizeDiseaseName(cleaned);
+  }
+
+  function extractPromptConstraints(prompt: string): PromptConstraints {
+    const p = prompt.toLowerCase();
+    return {
+      requiresElderlySafety: /\b(elderly|older adults|geriatric|age\s*65|senior)\b/.test(p),
+      requiresOral: /\b(oral|orally|tablet|capsule|pill)\b/.test(p),
+      requiresLowCost: /\b(low cost|cheap|affordable|generic|cost effective|low[-\s]?cost)\b/.test(p),
+      requiresLowPatentBarrier: /\b(low patent|patent barrier|ip barrier|freedom to operate|off[-\s]?patent|low ip)\b/.test(p),
+    };
+  }
+
+  function extractTargetDiseaseFromPrompt(prompt: string): string | null {
+    const compact = prompt.replace(/\s+/g, ' ').trim();
+    if (!compact) return null;
+
+    const patterns = [
+      /(?:candidate|drug|treatment|therapy|option)\s+for\s+(.+)$/i,
+      /(?:for|against)\s+(.+)$/i,
+    ];
+
+    let captured = '';
+    for (const pattern of patterns) {
+      const m = compact.match(pattern);
+      if (m?.[1]) {
+        captured = m[1];
+        break;
+      }
+    }
+    if (!captured) captured = compact;
+
+    captured = captured.split(',')[0].trim();
+    captured = captured
+      .split(/\b(that|which|with|where|safe|oral|affordable|low patent|low cost|and has|and is)\b/i)[0]
+      .replace(/\b(maybe|possibly|probably|perhaps)\b/gi, ' ')
+      .replace(/[?.!,;:]+$/g, '')
+      .trim();
+
+    if (!captured) return null;
+
+    const canonical = canonicalizeDiseaseForApprovalMatch(captured);
+    if (!canonical || canonical.length < 4) return null;
+    return canonical;
+  }
+
+  function buildDiseaseAliases(targetCanonical: string): string[] {
+    const aliases = new Set<string>();
+    aliases.add(targetCanonical);
+    for (const [k, v] of Object.entries(DISEASE_SYNONYMS)) {
+      if (v === targetCanonical) aliases.add(k);
+    }
+
+    return Array.from(aliases).map(normalizeFreeText).filter(Boolean);
+  }
+
+  function hasTargetDiseaseApproval(indications: string[], targetCanonical: string): { approved: boolean; evidence?: string } {
+    if (!targetCanonical || indications.length === 0) return { approved: false };
+
+    const aliases = buildDiseaseAliases(targetCanonical);
+    const normalizedTarget = normalizeFreeText(targetCanonical);
+
+    for (const indication of indications) {
+      const normalized = normalizeFreeText(indication);
+      if (!normalized) continue;
+
+      if (aliases.some((alias) => normalized.includes(alias))) {
+        return { approved: true, evidence: indication.slice(0, 220) };
+      }
+
+      const sections = normalized
+        .split(/[.;\n]/)
+        .map((s) => s.trim())
+        .filter((s) => s.length >= 8)
+        .slice(0, 16);
+
+      for (const section of sections) {
+        if (jaccardSimilarity(section, normalizedTarget) >= 0.86) {
+          return { approved: true, evidence: indication.slice(0, 220) };
+        }
+      }
+    }
+
+    return { approved: false };
+  }
+
+  async function queryOpenFDALabelRows(name: string): Promise<any[]> {
+    const term = name.trim();
+    if (!term) return [];
+
+    const termLower = term.toLowerCase();
+    const termUpper = term.toUpperCase();
+    const urls = [
+      `https://api.fda.gov/drug/label.json?search=openfda.substance_name:"${encodeURIComponent(termUpper)}"&limit=20`,
+      `https://api.fda.gov/drug/label.json?search=openfda.generic_name:"${encodeURIComponent(termLower)}"&limit=20`,
+      `https://api.fda.gov/drug/label.json?search=openfda.brand_name:"${encodeURIComponent(termUpper)}"&limit=20`,
+    ];
+
+    const allRows: any[] = [];
+    for (const url of urls) {
+      try {
+        const res = await fetch(url, { signal: AbortSignal.timeout(7000) });
+        if (!res.ok) continue;
+        const data = await res.json() as any;
+        const rows = Array.isArray(data?.results) ? data.results : [];
+        allRows.push(...rows);
+      } catch {}
+    }
+
+    const exactRows = allRows.filter((row: any) => {
+      const openfda = row?.openfda || {};
+      const candidateNames: string[] = [
+        ...(Array.isArray(openfda.generic_name) ? openfda.generic_name : []),
+        ...(Array.isArray(openfda.brand_name) ? openfda.brand_name : []),
+        ...(Array.isArray(openfda.substance_name) ? openfda.substance_name : []),
+      ];
+      return candidateNames.some((n) => matchesDrugTerm(n, term));
+    });
+
+    const rowsToUse = exactRows.length > 0 ? exactRows : allRows;
+    const dedup = new Map<string, any>();
+    for (const row of rowsToUse) {
+      const key = String(row?.set_id || row?.id || row?.spl_id || `${row?.openfda?.application_number?.[0] || ''}-${row?.effective_time || ''}`);
+      if (!dedup.has(key)) dedup.set(key, row);
+    }
+    return Array.from(dedup.values());
+  }
+
+  function extractLabelProfile(rows: any[]): OpenFDALabelProfile {
+    const indications: string[] = [];
+    const boxedWarnings: string[] = [];
+    const contraindications: string[] = [];
+    const routes = new Set<string>();
+    let hasGenericSignal = false;
+
+    for (const row of rows) {
+      if (Array.isArray(row?.indications_and_usage)) indications.push(...row.indications_and_usage);
+      if (Array.isArray(row?.boxed_warning)) boxedWarnings.push(...row.boxed_warning);
+      if (Array.isArray(row?.contraindications)) contraindications.push(...row.contraindications);
+
+      const openfda = row?.openfda || {};
+      const genericNames: string[] = Array.isArray(openfda.generic_name) ? openfda.generic_name : [];
+      if (genericNames.length > 0) hasGenericSignal = true;
+
+      const rowRoutes: string[] = Array.isArray(openfda.route) ? openfda.route : [];
+      rowRoutes.forEach((r) => routes.add(String(r).toLowerCase()));
+    }
+
+    const elderlyPattern = /\b(geriatr|elderly|older adults|age\s*65|older patients?)\b/i;
+    const elderlyWarning = [...boxedWarnings, ...contraindications].some((t) => elderlyPattern.test(t));
+
+    return {
+      rows,
+      indications,
+      boxedWarnings,
+      contraindications,
+      routes: Array.from(routes),
+      elderlyWarning,
+      hasGenericSignal,
+    };
+  }
+
+  async function fetchClinicalEvidenceForTarget(moleculeName: string, targetDisease: string): Promise<{ trialCount: number; latePhaseTrialCount: number }> {
+    try {
+      const url = `https://clinicaltrials.gov/api/v2/studies?query.intr=${encodeURIComponent(moleculeName)}&query.cond=${encodeURIComponent(targetDisease)}&pageSize=25`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(9000) });
+      if (!res.ok) return { trialCount: 0, latePhaseTrialCount: 0 };
+      const data = await res.json() as any;
+      const studies = Array.isArray(data?.studies) ? data.studies : [];
+      const latePhaseTrialCount = studies.filter((s: any) => {
+        const phasesRaw = s?.protocolSection?.designModule?.phases;
+        const phaseText = Array.isArray(phasesRaw) ? phasesRaw.join(' ') : String(phasesRaw || '');
+        const p = phaseText.toUpperCase();
+        return p.includes('PHASE 3') || p.includes('PHASE3') || p.includes('PHASE 4') || p.includes('PHASE4');
+      }).length;
+      return { trialCount: studies.length, latePhaseTrialCount };
+    } catch {
+      return { trialCount: 0, latePhaseTrialCount: 0 };
+    }
+  }
+
+  async function fetchPatentCountForMolecule(moleculeName: string): Promise<number | null> {
+    try {
+      const cidRes = await fetch(
+        `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encodeURIComponent(moleculeName)}/cids/JSON`,
+        { signal: AbortSignal.timeout(8000) }
+      );
+      if (!cidRes.ok) return null;
+      const cidData = await cidRes.json() as any;
+      const cids: number[] = cidData?.IdentifierList?.CID || [];
+      if (!cids.length) return null;
+
+      const patentsRes = await fetch(
+        `https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/${cids[0]}/JSON?heading=Patents`,
+        { signal: AbortSignal.timeout(10000) }
+      );
+      if (!patentsRes.ok) return null;
+
+      const patentsData = await patentsRes.json() as any;
+      const patentIds = new Set<string>();
+      const patentPattern = /\b(US|EP|WO)\d+/i;
+
+      const extract = (node: any) => {
+        if (!node || typeof node !== 'object') return;
+        const values = node?.Value?.StringWithMarkup;
+        if (Array.isArray(values)) {
+          for (const item of values) {
+            const txt = item?.String;
+            if (typeof txt === 'string' && patentPattern.test(txt)) {
+              patentIds.add(txt.trim());
+            }
+          }
+        }
+        for (const section of node?.Section || []) extract(section);
+        for (const info of node?.Information || []) extract(info);
+      };
+
+      extract(patentsData?.Record);
+      return patentIds.size;
+    } catch {
+      return null;
+    }
+  }
+
+  async function generateCandidatePanel(prompt: string, targetDisease: string, constraints: PromptConstraints): Promise<CandidateSuggestion[]> {
+    const keys = getGroqKeys('chat');
+    if (keys.length === 0) {
+      throw new Error('AI service unavailable. Please enter a specific molecule name instead.');
+    }
+
+    const systemPrompt = `You are an AI drug repurposing scientist using a hypothesis-first approach.
+Generate candidate drugs to repurpose for a target disease.
+
+Hard requirements:
+- Return 5-10 candidates
+- FDA-approved drugs only
+- Human safety data must exist
+- Exclude drugs already approved for the target disease
+- No made-up compounds
+- If query is not medical, return {"candidates":[],"note":"NON_MEDICAL"}
+
+Output strict JSON object:
+{"candidates":[{"molecule":"<drug>","rationale":"<short reason>"}],"note":"<optional>"}`;
+
+    const userPrompt = `Prompt: ${prompt}
+Target disease family: ${targetDisease}
+Constraints:
+- elderly safety required: ${constraints.requiresElderlySafety}
+- oral route required: ${constraints.requiresOral}
+- low cost required: ${constraints.requiresLowCost}
+- low patent barrier required: ${constraints.requiresLowPatentBarrier}`;
+
+    let lastError: any = null;
+    for (const key of keys) {
+      try {
+        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(15000),
+          body: JSON.stringify({
+            model: 'llama-3.3-70b-versatile',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt },
+            ],
+            response_format: { type: 'json_object' },
+            temperature: 0.2,
+          }),
+        });
+
+        if (res.status === 429 || res.status === 401) {
+          continue;
+        }
+        if (!res.ok) throw new Error(`Groq API Error: ${res.status}`);
+
+        const data = await res.json() as any;
+        const parsed = JSON.parse(data?.choices?.[0]?.message?.content || '{}') as any;
+        const note = String(parsed?.note || '').toUpperCase();
+        if (note.includes('NON_MEDICAL')) {
+          throw new Error('Your query does not appear related to medicine or drug repurposing.');
+        }
+
+        const rawCandidates = Array.isArray(parsed?.candidates) ? parsed.candidates : [];
+        const cleaned: CandidateSuggestion[] = [];
+        const seen = new Set<string>();
+
+        for (const item of rawCandidates) {
+          const rawMolecule = (typeof item === 'string' ? item : item?.molecule || '').trim();
+          const molecule = rawMolecule.split(/[;,\n\r]/)[0].trim();
+          const rationale = (typeof item === 'string' ? '' : item?.rationale || '').trim();
+          if (!molecule) continue;
+          const malformedPattern = /\b(excluded|considering|instead|already approved|not suitable|choose|avoid|reject|filter out)\b/i;
+          if (malformedPattern.test(molecule)) continue;
+          if (!/^[A-Za-z0-9][A-Za-z0-9\s\-()]{1,60}$/.test(molecule)) continue;
+          if (molecule.split(/\s+/).length > 4) continue;
+          const keyName = normalizeDrugTerm(molecule);
+          if (seen.has(keyName)) continue;
+          seen.add(keyName);
+          cleaned.push({ molecule, rationale });
+          if (cleaned.length >= 10) break;
+        }
+
+        return cleaned;
+      } catch (e) {
+        lastError = e;
+        continue;
+      }
+    }
+
+    if (lastError) throw lastError;
+    return [];
+  }
+
+  async function evaluateCandidateSuggestion(
+    suggestion: CandidateSuggestion,
+    targetDisease: string,
+    constraints: PromptConstraints
+  ): Promise<CandidateEvaluation> {
+    const moleculeName = suggestion.molecule.trim();
+    const validMolecule = await validateMolecule(moleculeName);
+
+    if (!validMolecule) {
+      return {
+        molecule: moleculeName,
+        rationale: suggestion.rationale,
+        validMolecule: false,
+        approvedForTarget: false,
+        safetyScore: 0,
+        patentScore: 0,
+        clinicalScore: 0,
+        affordabilityScore: 0,
+        oralLikely: null,
+        totalScore: 0,
+        eliminationReason: 'Not validated as a pharmaceutical molecule',
+        evidence: {
+          trialCount: 0,
+          latePhaseTrialCount: 0,
+          patentCount: null,
+          boxedWarningCount: 0,
+          elderlyWarning: false,
+          hasGenericSignal: false,
+        },
+      };
+    }
+
+    const [labelRows, clinicalEvidence, patentCount] = await Promise.all([
+      queryOpenFDALabelRows(moleculeName),
+      fetchClinicalEvidenceForTarget(moleculeName, targetDisease),
+      fetchPatentCountForMolecule(moleculeName),
+    ]);
+
+    const profile = extractLabelProfile(labelRows);
+    const approval = hasTargetDiseaseApproval(profile.indications, targetDisease);
+
+    const oralLikely = profile.routes.length === 0 ? null : profile.routes.some((r) => /\boral\b/i.test(r));
+
+    let safetyScore = 8;
+    if (profile.boxedWarnings.length > 0) safetyScore -= 3;
+    if (profile.elderlyWarning) safetyScore -= 2;
+    if (profile.contraindications.length > 0) safetyScore -= Math.min(2, profile.contraindications.length * 0.25);
+    safetyScore = Math.max(0, Math.min(10, safetyScore));
+
+    let patentScore = 5;
+    if (patentCount != null) {
+      if (patentCount === 0) patentScore = 9;
+      else if (patentCount <= 3) patentScore = 7;
+      else if (patentCount <= 10) patentScore = 4;
+      else patentScore = 2;
+    }
+
+    const clinicalScore = Math.max(
+      0,
+      Math.min(10, (clinicalEvidence.trialCount * 0.35) + (clinicalEvidence.latePhaseTrialCount * 1.5))
+    );
+
+    let affordabilityScore = profile.hasGenericSignal ? 8 : 4;
+    if (profile.rows.length >= 8) affordabilityScore = Math.min(9, affordabilityScore + 1);
+    if (constraints.requiresLowCost && !profile.hasGenericSignal) affordabilityScore = Math.max(2, affordabilityScore - 1);
+
+    let totalScore = (clinicalScore * 0.35) + (safetyScore * 0.25) + (patentScore * 0.2) + (affordabilityScore * 0.2);
+    if (constraints.requiresOral && oralLikely === false) totalScore -= 1.5;
+    if (constraints.requiresElderlySafety && profile.elderlyWarning) totalScore -= 1.0;
+    totalScore = Math.max(0, Math.min(10, totalScore));
+
+    return {
+      molecule: moleculeName,
+      rationale: suggestion.rationale,
+      validMolecule: true,
+      approvedForTarget: approval.approved,
+      approvalEvidence: approval.evidence,
+      safetyScore,
+      patentScore,
+      clinicalScore,
+      affordabilityScore,
+      oralLikely,
+      totalScore,
+      evidence: {
+        trialCount: clinicalEvidence.trialCount,
+        latePhaseTrialCount: clinicalEvidence.latePhaseTrialCount,
+        patentCount,
+        boxedWarningCount: profile.boxedWarnings.length,
+        elderlyWarning: profile.elderlyWarning,
+        hasGenericSignal: profile.hasGenericSignal,
+      },
+    };
+  }
+
+  async function mapWithConcurrency<T, R>(
+    items: T[],
+    concurrency: number,
+    worker: (item: T) => Promise<R>
+  ): Promise<R[]> {
+    if (items.length === 0) return [];
+    const results = new Array<R>(items.length);
+    let currentIndex = 0;
+
+    const runners = new Array(Math.min(concurrency, items.length)).fill(null).map(async () => {
+      while (true) {
+        const idx = currentIndex;
+        currentIndex += 1;
+        if (idx >= items.length) break;
+        results[idx] = await worker(items[idx]);
+      }
+    });
+
+    await Promise.all(runners);
+    return results;
+  }
+
+  function runEliminationTournament(
+    evaluations: CandidateEvaluation[],
+    constraints: PromptConstraints
+  ): {
+    winner: CandidateEvaluation | null;
+    runnerUps: CandidateEvaluation[];
+    killList: Array<{ molecule: string; reason: string }>;
+    bracket: { round1: BracketEntry[]; round2: BracketEntry[]; round3: BracketEntry[] };
+    fallbackUsed: boolean;
+    warning?: string;
+  } {
+    const killList: Array<{ molecule: string; reason: string }> = [];
+    const bracket = { round1: [] as BracketEntry[], round2: [] as BracketEntry[], round3: [] as BracketEntry[] };
+
+    const eligible: CandidateEvaluation[] = [];
+    for (const e of evaluations) {
+      if (!e.validMolecule) {
+        killList.push({ molecule: e.molecule, reason: e.eliminationReason || 'Failed molecule validation' });
+        continue;
+      }
+      if (e.approvedForTarget) {
+        const reason = `Already approved for target disease family${e.approvalEvidence ? `: ${e.approvalEvidence}` : ''}`;
+        e.eliminationRound = 0;
+        e.eliminationReason = reason;
+        killList.push({ molecule: e.molecule, reason });
+        continue;
+      }
+      eligible.push(e);
+    }
+
+    const round1: CandidateEvaluation[] = [];
+    for (const e of eligible) {
+      let reason: string | undefined;
+      if (constraints.requiresOral && e.oralLikely === false) {
+        reason = 'Failed oral availability requirement';
+      } else if ((constraints.requiresElderlySafety && e.safetyScore < 6) || e.safetyScore < 4) {
+        reason = 'Failed safety filter (elderly risk or warning burden too high)';
+      }
+
+      if (reason) {
+        e.eliminationRound = 1;
+        e.eliminationReason = reason;
+        killList.push({ molecule: e.molecule, reason });
+        bracket.round1.push({ molecule: e.molecule, status: 'eliminated', reason });
+      } else {
+        round1.push(e);
+        bracket.round1.push({ molecule: e.molecule, status: 'advance' });
+      }
+    }
+
+    const round2: CandidateEvaluation[] = [];
+    for (const e of round1) {
+      let reason: string | undefined;
+      const patentThreshold = constraints.requiresLowPatentBarrier ? 5 : 3;
+      if (e.patentScore < patentThreshold) {
+        reason = 'Failed patent barrier filter';
+      }
+
+      if (reason) {
+        e.eliminationRound = 2;
+        e.eliminationReason = reason;
+        killList.push({ molecule: e.molecule, reason });
+        bracket.round2.push({ molecule: e.molecule, status: 'eliminated', reason });
+      } else {
+        round2.push(e);
+        bracket.round2.push({ molecule: e.molecule, status: 'advance' });
+      }
+    }
+
+    const round3: CandidateEvaluation[] = [];
+    for (const e of round2) {
+      let reason: string | undefined;
+      if (e.clinicalScore < 2.5) {
+        reason = 'Failed clinical strength filter for target disease';
+      }
+
+      if (reason) {
+        e.eliminationRound = 3;
+        e.eliminationReason = reason;
+        killList.push({ molecule: e.molecule, reason });
+        bracket.round3.push({ molecule: e.molecule, status: 'eliminated', reason });
+      } else {
+        round3.push(e);
+        bracket.round3.push({ molecule: e.molecule, status: 'advance' });
+      }
+    }
+
+    const sortByScore = (arr: CandidateEvaluation[]) => [...arr].sort((a, b) => b.totalScore - a.totalScore);
+    const finalists = sortByScore(round3);
+
+    if (finalists.length > 0) {
+      return {
+        winner: finalists[0],
+        runnerUps: finalists.slice(1, 4),
+        killList,
+        bracket,
+        fallbackUsed: false,
+      };
+    }
+
+    const fallbackPool = sortByScore(eligible);
+    if (fallbackPool.length === 0) {
+      return {
+        winner: null,
+        runnerUps: [],
+        killList,
+        bracket,
+        fallbackUsed: false,
+      };
+    }
+
+    return {
+      winner: fallbackPool[0],
+      runnerUps: fallbackPool.slice(1, 4),
+      killList,
+      bracket,
+      fallbackUsed: true,
+      warning: 'No candidate passed all elimination rounds. Returned the best investigational/off-label non-approved option.',
+    };
+  }
+
+  function computeWinnerConfidence(winner: CandidateEvaluation, fallbackUsed: boolean): number {
+    const base = Math.round(winner.totalScore * 10);
+    const adjusted = base - (fallbackUsed ? 12 : 0) + (winner.clinicalScore >= 5 ? 5 : 0);
+    return Math.max(30, Math.min(95, adjusted));
+  }
+
+  // --- Prompt → Molecule Resolution via LLM (single-shot fallback mode) ---
+  async function resolvePromptToSingleMolecule(prompt: string): Promise<{ molecule: string; reasoning: string }> {
+    const keys = getGroqKeys('chat');
+    if (keys.length === 0) {
+      throw new Error('AI service unavailable. Please enter a specific molecule name instead.');
+    }
+
+    const systemPrompt = `You are a pharmaceutical expert specializing in drug repurposing. Given a user's natural language query about diseases, treatments, or drug repurposing, identify the single most relevant existing approved drug/molecule to analyze for repurposing potential.
+
+Rules:
+- Return ONLY a real, approved pharmaceutical compound name that exists in PubChem
+- Do NOT return disease names, generic terms, or made-up molecules
+- Pick the most promising repurposing candidate for the described condition
+- If the query mentions a specific drug, return that drug
+- If the query describes a disease/condition, pick the best-known drug being studied for repurposing to that condition
+- If the query is clearly NOT about medicine, pharmaceuticals, diseases, health conditions, or drug repurposing, return {"molecule": "NONE", "reasoning": "Query is not related to medicine or drug repurposing"}. Examples of non-medical queries: "cycle walking", "best pizza recipe", "how to learn guitar", "panda", "weather forecast"
+
+Return valid JSON: {"molecule": "<drug name>", "reasoning": "<1-2 sentence explanation>"}`;
+
+    let lastError: any = null;
+    for (const key of keys) {
+      try {
+        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(15000),
+          body: JSON.stringify({
+            model: 'llama-3.3-70b-versatile',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: prompt },
+            ],
+            response_format: { type: 'json_object' },
+            temperature: 0.1,
+          }),
+        });
+        if (res.status === 429 || res.status === 401) {
+          console.warn(`[ResolvePrompt] Groq key failed with status ${res.status}, trying next...`);
+          continue;
+        }
+        if (!res.ok) throw new Error(`Groq API Error: ${res.status}`);
+        const data = await res.json() as any;
+        const parsed = JSON.parse(data.choices[0].message.content);
+
+        if (!parsed.molecule || typeof parsed.molecule !== 'string') {
+          throw new Error('LLM returned invalid molecule field');
+        }
+
+        if (parsed.molecule.toUpperCase() === 'NONE') {
+          throw new Error('Your query doesn\'t appear to be related to medicine or drug repurposing. Try entering a drug name like Aspirin or describing a medical condition.');
+        }
+
+        const isValid = await validateMolecule(parsed.molecule);
+        if (!isValid) {
+          console.warn(`[ResolvePrompt] LLM suggested "${parsed.molecule}" but it failed molecule validation. Retrying...`);
+          const retryRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(15000),
+            body: JSON.stringify({
+              model: 'llama-3.3-70b-versatile',
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: prompt },
+                { role: 'assistant', content: JSON.stringify(parsed) },
+                { role: 'user', content: `"${parsed.molecule}" failed pharmaceutical molecule validation. Suggest a different FDA-approved drug that is listed in PubChem. Return JSON: {"molecule": "<name>", "reasoning": "<explanation>"}` },
+              ],
+              response_format: { type: 'json_object' },
+              temperature: 0.2,
+            }),
+          });
+          if (retryRes.ok) {
+            const retryData = await retryRes.json() as any;
+            const retryParsed = JSON.parse(retryData.choices[0].message.content);
+            if (retryParsed.molecule) {
+              const retryValid = await validateMolecule(retryParsed.molecule);
+              if (retryValid) {
+                return { molecule: retryParsed.molecule, reasoning: retryParsed.reasoning || '' };
+              }
+            }
+          }
+          throw new Error(`Could not find a valid molecule for your query. The AI suggested "${parsed.molecule}" but it failed pharmaceutical validation. Try rephrasing or entering a specific drug name.`);
+        }
+
+        return { molecule: parsed.molecule, reasoning: parsed.reasoning || '' };
+      } catch (e) {
+        lastError = e;
+        if ((e as Error).message.includes('Could not find a valid molecule')) throw e;
+        console.warn(`[ResolvePrompt] Attempt failed: ${(e as Error).message}. Trying next key...`);
+        continue;
+      }
+    }
+    throw new Error(lastError?.message || 'AI service unavailable. Please enter a specific molecule name instead.');
+  }
+
+  // --- Prompt → Molecule Resolution (hypothesis-first elimination mode) ---
+  async function resolvePromptToMolecule(prompt: string): Promise<PromptResolutionResult> {
+    const cleanedPrompt = prompt.trim();
+    const constraints = extractPromptConstraints(cleanedPrompt);
+    const targetDisease = extractTargetDiseaseFromPrompt(cleanedPrompt);
+
+    // If we cannot confidently identify a disease target, use existing single-shot flow.
+    if (!targetDisease) {
+      const single = await resolvePromptToSingleMolecule(cleanedPrompt);
+      return {
+        molecule: single.molecule,
+        reasoning: single.reasoning,
+        selectionMeta: {
+          strategy: 'single-shot-no-target',
+          targetDisease: null,
+          constraints,
+          winnerConfidence: 55,
+          winnerScores: { total: 5.5, safety: 5.5, patent: 5.5, clinical: 5.5, affordability: 5.5 },
+          runnerUps: [],
+          eliminationBracket: { round1: [], round2: [], round3: [] },
+          killList: [],
+          fallbackUsed: true,
+          warning: 'Target disease could not be parsed; used single-candidate resolution.',
+        },
+      };
+    }
+
+    const suggestions = await generateCandidatePanel(cleanedPrompt, targetDisease, constraints);
+    if (suggestions.length === 0) {
+      throw new Error('Unable to generate repurposing hypotheses for this prompt. Try adding a clearer disease target and constraints.');
+    }
+
+    const evaluations = await mapWithConcurrency(suggestions.slice(0, 10), 4, (s) => evaluateCandidateSuggestion(s, targetDisease, constraints));
+    const tournament = runEliminationTournament(evaluations, constraints);
+
+    if (!tournament.winner) {
+      throw new Error(`Could not find a non-approved repurposing candidate for "${targetDisease}" under current constraints. Try broadening the prompt.`);
+    }
+
+    const winner = tournament.winner;
+    const confidence = computeWinnerConfidence(winner, tournament.fallbackUsed);
+    const reasoningParts = [
+      `Selected ${winner.molecule} via hypothesis-first elimination for ${targetDisease}.`,
+      `Safety ${winner.safetyScore.toFixed(1)}/10, Patent ${winner.patentScore.toFixed(1)}/10, Clinical ${winner.clinicalScore.toFixed(1)}/10, Affordability ${winner.affordabilityScore.toFixed(1)}/10.`,
+      tournament.warning || '',
+    ].filter(Boolean);
+
+    const selectionMeta: PromptResolutionMeta = {
+      strategy: 'hypothesis-first-elimination',
+      targetDisease,
+      constraints,
+      winnerConfidence: confidence,
+      winnerScores: {
+        total: Number(winner.totalScore.toFixed(2)),
+        safety: Number(winner.safetyScore.toFixed(2)),
+        patent: Number(winner.patentScore.toFixed(2)),
+        clinical: Number(winner.clinicalScore.toFixed(2)),
+        affordability: Number(winner.affordabilityScore.toFixed(2)),
+      },
+      runnerUps: tournament.runnerUps.map((r) => ({
+        molecule: r.molecule,
+        score: Number(r.totalScore.toFixed(2)),
+        note: r.rationale || 'Survived initial filtering but ranked below winner.',
+      })),
+      eliminationBracket: tournament.bracket,
+      killList: tournament.killList,
+      fallbackUsed: tournament.fallbackUsed,
+      warning: tournament.warning,
+    };
+
+    return {
+      molecule: winner.molecule,
+      reasoning: reasoningParts.join(' '),
+      selectionMeta,
+    };
   }
 
   async function runPipeline(jobId: string, molecule: string) {

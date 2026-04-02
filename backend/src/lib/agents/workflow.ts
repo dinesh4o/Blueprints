@@ -185,7 +185,7 @@ async function fetchSimilarMolecules(state: typeof GraphState.State) {
     );
     const similarCIDs: number[] = (simRes.data?.IdentifierList?.CID || [])
       .filter((c: number) => c !== cid)
-      .slice(0, 8);
+      .slice(0, 12);
     if (!similarCIDs.length) return { similarMolecules: [] };
 
     // Get properties + synonyms in parallel
@@ -195,7 +195,7 @@ async function fetchSimilarMolecules(state: typeof GraphState.State) {
         { timeout: 10000 }
       ),
       axios.get(
-        `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${similarCIDs.slice(0, 6).join(',')}/synonyms/JSON`,
+        `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${similarCIDs.slice(0, 10).join(',')}/synonyms/JSON`,
         { timeout: 10000 }
       ),
     ]);
@@ -205,7 +205,7 @@ async function fetchSimilarMolecules(state: typeof GraphState.State) {
 
     // For each analog, resolve common name + check clinical history
     const analogResults = await Promise.allSettled(
-      props.slice(0, 5).map(async (p: any) => {
+      props.slice(0, 8).map(async (p: any) => {
         const synInfo = synonymsAll.find((s: any) => s.CID === p.CID);
         const syns: string[] = synInfo?.Synonym || [];
 
@@ -219,7 +219,7 @@ async function fetchSimilarMolecules(state: typeof GraphState.State) {
         // Query ClinicalTrials to understand this analog's history
         try {
           const trialsRes = await axios.get(
-            `https://clinicaltrials.gov/api/v2/studies?query.term=${encodeURIComponent(commonName)}&pageSize=5`,
+            `https://clinicaltrials.gov/api/v2/studies?query.intr=${encodeURIComponent(commonName)}&pageSize=10`,
             { timeout: 8000 }
           );
           const trials = trialsRes.data?.studies || [];
@@ -283,8 +283,11 @@ async function fetchSimilarMolecules(state: typeof GraphState.State) {
 // Clinical Agent (ClinicalTrials.gov)
 async function fetchClinicalData(state: typeof GraphState.State) {
   try {
+    // Use query.intr (intervention search) instead of query.term (full-text search)
+    // query.term matches study titles, acronyms, and conditions — returning irrelevant
+    // results for non-drug words. query.intr only matches actual drug/intervention names.
     const res = await axios.get(
-      `https://clinicaltrials.gov/api/v2/studies?query.term=${encodeURIComponent(state.molecule)}&pageSize=10`
+      `https://clinicaltrials.gov/api/v2/studies?query.intr=${encodeURIComponent(state.molecule)}&pageSize=25`
     );
     return {
       clinicalData: (res.data.studies || []).map((s: any) => ({
@@ -294,6 +297,10 @@ async function fetchClinicalData(state: typeof GraphState.State) {
         status:    s.protocolSection?.statusModule?.overallStatus || 'UNKNOWN',
         phase:     s.protocolSection?.designModule?.phases?.[0] || 'Unknown',
         condition: s.protocolSection?.conditionsModule?.conditions?.[0] || 'Unknown',
+        startDate: s.protocolSection?.statusModule?.startDateStruct?.date || null,
+        completionDate: s.protocolSection?.statusModule?.completionDateStruct?.date || null,
+        lastUpdateDate: s.protocolSection?.statusModule?.lastUpdatePostDateStruct?.date || null,
+        enrollmentCount: s.protocolSection?.designModule?.enrollmentInfo?.count || null,
       }))
     };
   } catch (err: any) { 
@@ -305,7 +312,7 @@ async function fetchClinicalData(state: typeof GraphState.State) {
 // Literature Agent (PubMed)
 async function fetchLiteratureData(state: typeof GraphState.State) {
   try {
-    const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(state.molecule)}+AND+clinical+trial&retmode=json&retmax=5`;
+    const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(state.molecule)}+AND+clinical+trial&retmode=json&retmax=15`;
     const searchRes = await axios.get(searchUrl);
     
     // Total total_pubmed_papers count for ALL literature (bias check)
@@ -491,7 +498,7 @@ async function fetchTargetData(state: typeof GraphState.State) {
       return { targetData: { score: null, targetsFound: 0, source: 'Open Targets', targets: [], diseases: [], mechanisms: [] } };
     }
 
-    const targets = (drug.linkedTargets?.rows || []).slice(0, 10).map((t: any) => ({
+    const targets = (drug.linkedTargets?.rows || []).slice(0, 15).map((t: any) => ({
       id: t.id,
       name: t.approvedName,
       symbol: t.approvedSymbol,

@@ -310,7 +310,21 @@ router.put('/password', async (req: Request, res: Response) => {
     dbUser.password = newPassword;
     await dbUser.save();
 
-    res.json({ success: true, message: 'Password updated successfully' });
+    res.json({
+      success: true,
+      message: 'Password updated successfully',
+      user: {
+        id: dbUser._id,
+        email: dbUser.email,
+        name: dbUser.name,
+        avatar: dbUser.avatar,
+        authProvider: dbUser.authProvider,
+        hasPassword: !!dbUser.password,
+        plan: dbUser.plan || 'free',
+        planPaidAt: dbUser.planPaidAt,
+        createdAt: dbUser.createdAt,
+      },
+    });
   } catch (error: any) {
     console.error('Password update error:', error);
     res.status(500).json({ success: false, message: 'Failed to update password' });
@@ -415,7 +429,11 @@ router.get('/stats', async (req: Request, res: Response) => {
     const userId = (req.user as any)._id;
     const [analysisRuns, reportsGenerated] = await Promise.all([
       Job.countDocuments({ userId }),
-      Job.countDocuments({ userId, status: 'completed', reportData: { $exists: true, $ne: null } }),
+      Job.countDocuments({
+        userId,
+        status: { $in: ['completed', 'complete'] },
+        reportData: { $exists: true, $ne: null },
+      }),
     ]);
     res.json({ success: true, analysisRuns, reportsGenerated });
   } catch (error) {

@@ -124,6 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const result = await response.json();
     if (!result.success) throw new Error(result.message || 'Password update failed');
+    if (result.user) setUser(result.user);
   };
 
   return (
