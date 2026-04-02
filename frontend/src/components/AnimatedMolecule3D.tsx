@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, RotateCcw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 declare global {
   interface Window { $3Dmol: any; }
@@ -85,10 +86,13 @@ export default function AnimatedMolecule3D({ cid, height = 260 }: Props) {
       )}
 
       {status === 'error' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 z-10">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10">
           <p className="text-xs text-muted-foreground text-center px-4">
-            3D structure unavailable.
+            No 3D conformer available in PubChem for this compound.
           </p>
+          <Button size="sm" variant="outline" onClick={initViewer} className="gap-1 text-xs h-7">
+            <RotateCcw size={11} /> Retry
+          </Button>
         </div>
       )}
 
