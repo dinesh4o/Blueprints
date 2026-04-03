@@ -11,6 +11,7 @@ interface PathwayData {
   phoenixScore: number | null;
   targetData: any;
   molecule: string;
+  useColor?: boolean;
 }
 
 interface Pathway {
@@ -24,7 +25,7 @@ interface Pathway {
   icon: typeof Scale;
 }
 
-export default function RegulatoryPathway({ clinicalData, regulatoryData, repurposingCandidates, phoenixScore, targetData, molecule }: PathwayData) {
+export default function RegulatoryPathway({ clinicalData, regulatoryData, repurposingCandidates, phoenixScore, targetData, molecule, useColor = true }: PathwayData) {
   const analysis = useMemo(() => {
     const trials = Array.isArray(clinicalData) ? clinicalData : [];
     const cands = Array.isArray(repurposingCandidates) ? repurposingCandidates : [];
@@ -241,7 +242,7 @@ export default function RegulatoryPathway({ clinicalData, regulatoryData, repurp
                 initial={{ width: 0 }}
                 animate={{ width: `${recommended.probability}%` }}
                 transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
-                className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-emerald-500"
+                className={clsx("h-full rounded-full", useColor ? 'bg-gradient-to-r from-cyan-500 to-emerald-500' : 'bg-gradient-to-r from-zinc-500 to-zinc-400')}
               />
             </div>
           </div>
@@ -271,7 +272,9 @@ export default function RegulatoryPathway({ clinicalData, regulatoryData, repurp
                   animate={{ width: `${p.probability}%` }}
                   transition={{ duration: 1, delay: 0.3 + i * 0.1 }}
                   className={clsx("h-full rounded-full",
-                    p.probability >= 60 ? 'bg-emerald-500/70' : p.probability >= 40 ? 'bg-amber-500/70' : 'bg-zinc-600'
+                    useColor
+                      ? (p.probability >= 60 ? 'bg-emerald-500/70' : p.probability >= 40 ? 'bg-amber-500/70' : 'bg-zinc-600')
+                      : 'bg-zinc-500'
                   )}
                 />
               </div>

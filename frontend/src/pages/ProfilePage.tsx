@@ -127,7 +127,7 @@ export function ProfilePage() {
         <Button 
           variant="ghost" 
           size="icon" 
-          onClick={() => navigate(-1)}
+          onClick={() => navigate('/')}
           className="rounded-full hover:bg-zinc-900 text-zinc-400 hover:text-white"
         >
           <ArrowLeft className="w-5 h-5" />

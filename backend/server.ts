@@ -12,6 +12,7 @@ dotenv.config(); // fallback to local just in case
 
 import express from 'express';
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 import session from 'express-session';
 import MongoStore from 'connect-mongo';
 import cookieParser from 'cookie-parser';
@@ -20,6 +21,7 @@ import { connectDB } from './src/config/database';
 import passportConfig from './src/config/passport';
 import authRoutes from './src/routes/auth';
 import communityRoutes from './src/routes/community';
+import dashboardRoutes from './src/routes/dashboard';
 import { Job } from './src/models/Job';
 
 import { generateReportLaTeX } from './src/lib/pdfGenerator';
@@ -348,6 +350,7 @@ async function startServer() {
   // Authentication routes
   app.use('/api/auth', authRoutes);
   app.use('/api/community', communityRoutes);
+  app.use('/api/dashboard', dashboardRoutes);
 
   // In-memory store for jobs and reports (simulating MongoDB)
   const jobs = new Map<string, any>();
@@ -444,7 +447,8 @@ async function startServer() {
       selectionMeta,
       status: 'running',
       steps: [
-        { name: 'PubChemAgent', label: 'PubChem Verify', status: 'running', log: 'Initializing...' },
+        { name: 'PlannerAgent', label: 'Research Planning', status: 'running', log: 'Generating research plan...' },
+        { name: 'PubChemAgent', label: 'PubChem Verify', status: 'waiting', log: 'Pending...' },
         { name: 'ClinicalAgent', label: 'Clinical Trials', status: 'waiting', log: 'Pending...' },
         { name: 'PatentAgent', label: 'Patent Search', status: 'waiting', log: 'Pending...' },
         { name: 'LiteratureAgent', label: 'Literature Search', status: 'waiting', log: 'Pending...' },
@@ -1623,7 +1627,7 @@ Return valid JSON: {"molecule": "<drug name>", "reasoning": "<1-2 sentence expla
     };
   }
 
-  async function runPipeline(jobId: string, molecule: string) {
+  async function runPipeline(jobId: string, molecule: string, constraints?: Array<{type: string; value: string}>) {
     const updateStep = (index: number, status: string, log?: string, dataCount?: number) => {
       const job = jobs.get(jobId);
       if (job) {
@@ -1635,11 +1639,12 @@ Return valid JSON: {"molecule": "<drug name>", "reasoning": "<1-2 sentence expla
     };
 
     try {
-      updateStep(0, 'running', 'Verifying in registries...');
+      updateStep(0, 'done', 'Research plan generated.');
+      updateStep(1, 'running', 'Verifying in registries...');
       const isReal = await validateMolecule(molecule);
       if (!isReal) {
-         updateStep(0, 'done', 'No real-world data found.', 0);
-         updateStep(7, 'done', 'Processing bypassed.');
+         updateStep(1, 'done', 'No real-world data found.', 0);
+         updateStep(8, 'done', 'Processing bypassed.');
          const job = jobs.get(jobId);
          if (job) {
            const report = {
@@ -1651,26 +1656,25 @@ Return valid JSON: {"molecule": "<drug name>", "reasoning": "<1-2 sentence expla
            };
            reports.set(jobId, report);
         Job.findByIdAndUpdate(jobId, { status: 'completed', reportData: report, progress: 100, currentStep: 'Complete' }, { new: true }).catch(err => console.error('Failed to update DB', err));
-        Job.findByIdAndUpdate(jobId, { status: 'completed', reportData: report, progress: 100, currentStep: 'Complete' }, { new: true }).catch(err => console.error('Failed to update DB', err));
            job.status = 'complete'; jobs.set(jobId, job);
          }
          return;
       }
 
-      updateStep(1, 'running', 'Querying ClinicalTrials...');
-      updateStep(3, 'running', 'Querying PubMed...');
-      updateStep(4, 'running', 'Querying FDA Labels...');
+      updateStep(2, 'running', 'Querying ClinicalTrials...');
+      updateStep(4, 'running', 'Querying PubMed...');
+      updateStep(5, 'running', 'Querying FDA Labels...');
 
       await new Promise(r => setTimeout(r, 500));
-      updateStep(2, 'running', 'Searching USPTO...');
-      updateStep(5, 'running', 'Identifying disease targets...');
-      updateStep(6, 'running', 'Finding structural analogs...');
+      updateStep(3, 'running', 'Searching USPTO...');
+      updateStep(6, 'running', 'Identifying disease targets...');
+      updateStep(7, 'running', 'Finding structural analogs...');
 
       // Dynamically import LangGraph to avoid slowing down dev server boot time
       const { runPipeline: runLangGraphPipeline } = await import('./src/lib/agents/workflow');
 
       // Let LangGraph do all the parallel execution
-      const resultState = await runLangGraphPipeline(molecule);
+      const resultState = await runLangGraphPipeline(molecule, constraints);
 
       // Map back to our simulated job state
       const clinicalData = resultState.clinicalData || [];
@@ -1683,17 +1687,17 @@ Return valid JSON: {"molecule": "<drug name>", "reasoning": "<1-2 sentence expla
       const pubchemLabel = pubchemExists === true
         ? `CID ${resultState.pubchemData?.cid || 'found'} — ${resultState.pubchemData?.molecular_formula || 'verified'}`
         : pubchemExists === false ? 'Not in PubChem (fake)' : 'PubChem timeout';
-      updateStep(0, 'done', pubchemLabel, pubchemExists ? 1 : 0);
+      updateStep(1, 'done', pubchemLabel, pubchemExists ? 1 : 0);
 
-      updateStep(1, 'done', 'Data retrieved.', clinicalData.length);
-      updateStep(2, 'done', `Found ${resultState.patentData?.length || 0} patents.`, resultState.patentData?.length || 0);
-      updateStep(3, 'done', 'Abstracts embedded.', literatureData.length);
-      updateStep(4, 'done', 'Label data parsed.', 1);
-      updateStep(5, 'done', `Found ${resultState.targetData?.targetsFound || 0} targets via ${resultState.targetData?.source || 'Open Targets'}.`, resultState.targetData?.targetsFound || 0);
+      updateStep(2, 'done', 'Data retrieved.', clinicalData.length);
+      updateStep(3, 'done', `Found ${resultState.patentData?.length || 0} patents.`, resultState.patentData?.length || 0);
+      updateStep(4, 'done', 'Abstracts embedded.', literatureData.length);
+      updateStep(5, 'done', 'Label data parsed.', 1);
+      updateStep(6, 'done', `Found ${resultState.targetData?.targetsFound || 0} targets via ${resultState.targetData?.source || 'Open Targets'}.`, resultState.targetData?.targetsFound || 0);
 
       const similarMolecules = resultState.similarMolecules || [];
-      updateStep(6, 'done', `${similarMolecules.length} structural analogs analyzed`, similarMolecules.length);
-      updateStep(7, 'running', 'Synthesizing report...');
+      updateStep(7, 'done', `${similarMolecules.length} structural analogs analyzed`, similarMolecules.length);
+      updateStep(8, 'running', 'Synthesizing report...');
 
       // ── Start market estimates early (parallel with debate) ──
       const uniqueConditions = [...new Set(
@@ -1782,7 +1786,7 @@ AI Viability Score: ${resultState.viabilityScore}/10`;
       }
 
       await new Promise(r => setTimeout(r, 1000));
-      updateStep(7, 'done', 'Synthesis generated.');
+      updateStep(8, 'done', 'Synthesis generated.');
       
       const job = jobs.get(jobId);
       if (job) {
@@ -1845,11 +1849,13 @@ AI Viability Score: ${resultState.viabilityScore}/10`;
             reasoning: resultState.analysisReport // Passed directly from Groq!
           },
           debate_data: debate_data || null,
+          research_plan: resultState.researchPlan || null,
+          agent_attributions: (resultState.agentAttributions || []).filter((attr: any, idx: number, arr: any[]) => arr.findIndex((a: any) => a.agent === attr.agent) === idx),
+          cross_domain_reasoning: resultState.crossDomainReasoning || [],
           created_at: new Date().toISOString(),
         };
 
         reports.set(jobId, report);
-        Job.findByIdAndUpdate(jobId, { status: 'completed', reportData: report, progress: 100, currentStep: 'Complete' }, { new: true }).catch(err => console.error('Failed to update DB', err));
         Job.findByIdAndUpdate(jobId, { status: 'completed', reportData: report, progress: 100, currentStep: 'Complete' }, { new: true }).catch(err => console.error('Failed to update DB', err));
         
         job.status = 'complete';
@@ -1869,6 +1875,203 @@ AI Viability Score: ${resultState.viabilityScore}/10`;
       }
     }
   }
+
+  // ─── Conversational Orchestration Endpoint ────────────────────────────────
+  app.post('/api/converse/:jobId', async (req, res) => {
+    try {
+    const { jobId } = req.params;
+    const { message } = req.body;
+
+    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    // Get existing report
+    let report = reports.get(jobId);
+    if (!report) {
+      try {
+        const job = await Job.findById(jobId);
+        if (job?.reportData) {
+          report = job.reportData;
+          reports.set(jobId, report);
+        }
+      } catch {}
+    }
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found. Run analysis first.' });
+    }
+
+    const { Conversation } = await import('./src/models/Conversation');
+    const { translateUserMessage } = await import('./src/lib/agents/translator');
+
+    // Find or create conversation
+    let conversation = await Conversation.findOne({ jobId });
+    if (!conversation) {
+      conversation = new Conversation({
+        jobId,
+        userId: req.user ? (req.user as any)._id : undefined,
+        molecule: report.molecule,
+        messages: [{
+          role: 'system',
+          content: `Analysis conversation for ${report.molecule}. Phoenix Score: ${report.phoenix_score}/10.`,
+          timestamp: new Date(),
+        }],
+        activeConstraints: [],
+      });
+    }
+
+    // Add user message
+    conversation.messages.push({
+      role: 'user',
+      content: message.trim(),
+      timestamp: new Date(),
+    });
+
+    // Translate message to structured actions
+    const keys = getGroqKeys('chat');
+    const translation = await translateUserMessage(
+      message.trim(),
+      report.molecule,
+      report,
+      conversation.activeConstraints,
+      keys,
+    );
+
+    // Merge new constraints
+    if (translation.constraints.length > 0) {
+      for (const c of translation.constraints) {
+        const existing = conversation.activeConstraints.findIndex(
+          (ac: any) => ac.type === c.type && ac.field === c.field
+        );
+        if (existing >= 0) {
+          conversation.activeConstraints[existing] = c;
+        } else {
+          conversation.activeConstraints.push(c);
+        }
+      }
+    }
+
+    // Build assistant response with agent actions
+    const agentActions = translation.rerunAgents.map(a => ({
+      agent: a,
+      action: 'rerun',
+      status: 'pending' as const,
+    }));
+
+    conversation.messages.push({
+      role: 'assistant',
+      content: translation.responseText,
+      constraints: translation.constraints,
+      agentActions,
+      timestamp: new Date(),
+    });
+
+    await conversation.save();
+
+    // If a rerun is needed, kick it off
+    let rerunJobId: string | null = null;
+    if (translation.needsRerun && translation.rerunAgents.length > 0) {
+      // Create a new job for the re-analysis
+      const { runPipeline: runLangGraphPipeline } = await import('./src/lib/agents/workflow');
+
+      const newJobId = new mongoose.Types.ObjectId().toString();
+      try {
+        const newJob = await Job.create({
+          _id: newJobId,
+          molecule: report.molecule,
+          prompt: `Conversational re-analysis: ${message.trim()}`,
+          userId: req.user ? (req.user as any)._id : undefined,
+          status: 'processing',
+          currentStep: 'Re-analyzing with constraints...',
+        });
+        rerunJobId = newJob._id.toString();
+      } catch {
+        rerunJobId = newJobId;
+      }
+
+      // Build steps dynamically — only the agents being re-run + Planner + Synthesis
+      const allStepDefs: Record<string, { label: string }> = {
+        PlannerAgent:   { label: 'Research Planning' },
+        PubChemAgent:   { label: 'PubChem Verify' },
+        ClinicalAgent:  { label: 'Clinical Trials' },
+        PatentAgent:    { label: 'Patent Search' },
+        LiteratureAgent:{ label: 'Literature Search' },
+        RegulatoryAgent:{ label: 'FDA Data' },
+        TargetAgent:    { label: 'Disease Targets' },
+        AnalogAgent:    { label: 'Structural Analogs' },
+        SynthesisAgent: { label: 'Report Synthesis' },
+      };
+      const rerunSet = new Set(translation.rerunAgents);
+      // Always include PlannerAgent first and SynthesisAgent last
+      rerunSet.add('PlannerAgent');
+      rerunSet.add('SynthesisAgent');
+      const orderedAgents = Object.keys(allStepDefs).filter(k => rerunSet.has(k));
+      const rerunSteps = orderedAgents.map((name, i) => ({
+        name,
+        label: allStepDefs[name].label,
+        status: i === 0 ? 'running' : 'waiting',
+        log: i === 0 ? 'Re-planning with constraints...' : 'Pending...',
+      }));
+
+      jobs.set(rerunJobId!, {
+        id: rerunJobId,
+        molecule: report.molecule,
+        prompt: message.trim(),
+        status: 'running',
+        isSteerRerun: true,
+        rerunAgents: translation.rerunAgents,
+        steps: rerunSteps,
+        createdAt: new Date().toISOString(),
+      });
+
+      // Convert active constraints to pipeline format
+      const pipelineConstraints = conversation.activeConstraints.map((c: any) => ({
+        type: c.type,
+        value: c.value,
+        added_at: new Date().toISOString(),
+      }));
+
+      // Run in background
+      runPipeline(rerunJobId!, report.molecule, pipelineConstraints).catch(err => {
+        console.error(`Converse rerun error for ${rerunJobId}:`, err);
+      });
+    }
+
+    res.json({
+      conversationId: conversation._id,
+      response: translation.responseText,
+      constraints: translation.constraints,
+      activeConstraints: conversation.activeConstraints,
+      agentActions,
+      needsRerun: translation.needsRerun,
+      rerunJobId,
+      rerunAgents: translation.rerunAgents || [],
+    });
+    } catch (err: any) {
+      console.error('[Converse] Error:', err.message || err);
+      res.status(500).json({ error: 'Conversation processing failed', detail: err.message });
+    }
+  });
+
+  // Get conversation history for a job
+  app.get('/api/converse/:jobId', async (req, res) => {
+    const { jobId } = req.params;
+    try {
+      const { Conversation } = await import('./src/models/Conversation');
+      const conversation = await Conversation.findOne({ jobId });
+      if (!conversation) {
+        return res.json({ messages: [], activeConstraints: [] });
+      }
+      res.json({
+        conversationId: conversation._id,
+        messages: conversation.messages,
+        activeConstraints: conversation.activeConstraints,
+      });
+    } catch (err) {
+      console.error('Conversation fetch error:', err);
+      res.status(500).json({ error: 'Failed to fetch conversation' });
+    }
+  });
 
   app.post('/api/complete_analysis/:id', (req, res) => {
     const jobId = req.params.id;
@@ -1906,7 +2109,6 @@ AI Viability Score: ${resultState.viabilityScore}/10`;
       };
 
       reports.set(jobId, report);
-        Job.findByIdAndUpdate(jobId, { status: 'completed', reportData: report, progress: 100, currentStep: 'Complete' }, { new: true }).catch(err => console.error('Failed to update DB', err));
         Job.findByIdAndUpdate(jobId, { status: 'completed', reportData: report, progress: 100, currentStep: 'Complete' }, { new: true }).catch(err => console.error('Failed to update DB', err));
       
       job.steps[6].status = 'done';

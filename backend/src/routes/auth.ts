@@ -165,6 +165,7 @@ router.get('/me', (req: Request, res: Response) => {
       avatar: user.avatar,
       authProvider: user.authProvider,
       hasPassword: !!user.password,
+      role: user.role || 'user',
       plan: user.plan || 'free',
       planPaidAt: user.planPaidAt,
       createdAt: user.createdAt,

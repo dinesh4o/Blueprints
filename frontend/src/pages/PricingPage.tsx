@@ -73,13 +73,12 @@ export function PricingPage() {
 
       <nav className="fixed top-0 left-0 right-0 z-50 p-6 flex items-center justify-between border-b border-zinc-900 bg-black/50 backdrop-blur-xl">
         <button
-          onClick={() => navigate('/profile?tab=settings')}
+          onClick={() => navigate('/')}
           className="flex items-center gap-2 text-sm font-medium text-zinc-400 hover:text-white transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to Settings
+          Back to Home
         </button>
-        <div className="font-bold text-xl tracking-tighter text-white">V0</div>
       </nav>
 
       <main className="relative z-10 pt-32 pb-24 px-6 max-w-6xl mx-auto flex flex-col items-center">

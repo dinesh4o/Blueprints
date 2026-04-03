@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
-export default function IndicationMatrix({ clinicalData }: { clinicalData: any[] }) {
+export default function IndicationMatrix({ clinicalData, useColor = true }: { clinicalData: any[], useColor?: boolean }) {
   const data = useMemo(() => {
     if (!clinicalData || clinicalData.length === 0) return [];
 
@@ -79,9 +79,9 @@ export default function IndicationMatrix({ clinicalData }: { clinicalData: any[]
           />
           <ZAxis type="number" dataKey="z" range={[100, 1000]} name="Volume" />
           <Tooltip content={<CustomTooltip />} cursor={{ strokeDasharray: '3 3' }} />
-          <Scatter name="Indications" data={data} fill="#06b6d4" fillOpacity={0.6}>
+          <Scatter name="Indications" data={data} fill={useColor ? '#06b6d4' : '#71717a'} fillOpacity={0.6}>
             {data.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={entry.maxPhase >= 3 ? '#10b981' : '#06b6d4'} />
+              <Cell key={`cell-${index}`} fill={useColor ? (entry.maxPhase >= 3 ? '#10b981' : '#06b6d4') : (entry.maxPhase >= 3 ? '#a1a1aa' : '#71717a')} />
             ))}
           </Scatter>
         </ScatterChart>

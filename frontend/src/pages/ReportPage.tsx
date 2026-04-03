@@ -725,7 +725,7 @@ const HeroAlternativeMolecule = ({ cid }: { cid: number }) => {
   );
 };
 
-const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMode, setActiveSidebar }: any) => {
+const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMode, setActiveSidebar, useColor }: any) => {
   const [synthExpanded, setSynthExpanded] = useState(false);
   const synthesisTags = Array.from(new Set([
     report.molecule,
@@ -1036,6 +1036,71 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
         risks: report?.ai_analysis?.top_risks || []
       }} />
 
+      {/* Agent Attribution Chain */}
+      {report.agent_attributions?.length > 0 && (
+        <div className="mt-8 border border-zinc-800 rounded-xl bg-zinc-900/50 p-6">
+          <h3 className="text-lg font-semibold text-zinc-100 mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+            Agent Attribution Chain
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {report.agent_attributions.map((attr: any, i: number) => (
+              <div key={i} className="border border-zinc-800 rounded-lg p-4 bg-zinc-950/50 hover:border-zinc-700 transition-colors">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-mono font-bold text-indigo-400">{attr.agent}</span>
+                  <span className="text-xs text-zinc-500">{attr.evidence_count} evidence points</span>
+                </div>
+                <p className="text-sm text-zinc-300 leading-relaxed">{attr.insight}</p>
+                <div className="mt-3 flex items-center gap-2">
+                  <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                    <div
+                      className={clsx("h-full rounded-full transition-all duration-500", useColor ? '' : 'bg-zinc-500')}
+                      style={{
+                        width: `${(attr.confidence || 0) * 100}%`,
+                        ...(useColor ? { backgroundColor: (attr.confidence || 0) >= 0.7 ? '#4ade80' : (attr.confidence || 0) >= 0.4 ? '#fbbf24' : '#f87171' } : {}),
+                      }}
+                    />
+                  </div>
+                  <span className="text-xs text-zinc-500">{((attr.confidence || 0) * 100).toFixed(0)}%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Cross-Domain Reasoning */}
+      {report.cross_domain_reasoning?.length > 0 && (
+        <div className="mt-8 border border-zinc-800 rounded-xl bg-zinc-900/50 p-6">
+          <h3 className="text-lg font-semibold text-zinc-100 mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+            Cross-Domain Reasoning
+          </h3>
+          <div className="space-y-4">
+            {report.cross_domain_reasoning.map((reasoning: any, i: number) => (
+              <div key={i} className="border border-zinc-800 rounded-lg p-4 bg-zinc-950/50">
+                <div className="flex items-center gap-2 mb-2">
+                  {reasoning.domains?.map((d: string, j: number) => (
+                    <span key={j} className="text-xs font-mono px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                      {d}
+                    </span>
+                  ))}
+                  <span className="ml-auto text-xs text-zinc-500">{((reasoning.confidence || 0) * 100).toFixed(0)}% confidence</span>
+                </div>
+                <p className="text-sm text-zinc-300 leading-relaxed">{reasoning.insight}</p>
+                {reasoning.supporting_evidence?.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {reasoning.supporting_evidence.map((e: string, k: number) => (
+                      <span key={k} className="text-xs px-2 py-0.5 rounded bg-zinc-800/50 text-zinc-400">{e}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Regulatory Pathway Recommender */}
       <div className="mt-8">
         <RegulatoryPathway
@@ -1045,6 +1110,7 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
           repurposingCandidates={report.repurposing_candidates}
           phoenixScore={phoenixScore}
           targetData={report.target_data}
+          useColor={useColor}
         />
       </div>
 
@@ -1058,6 +1124,7 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
           ipScore={(report.patent_data || []).length === 0 ? 8 : Math.max(2, 10 - (report.patent_data || []).length)}
           evidenceScore={Math.min(10, (report.literature_data || []).length * 0.5 + (report.clinical_data || []).length * 0.3)}
           noveltyScore={report.pubchem_data?.mechanism_of_action ? 7 : 5}
+          useColor={useColor}
         />
       </div>
 
@@ -1094,6 +1161,7 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
       </div>
 
       {/* Repurposing Verdict */}
+      <div className="">
       <RepurposingVerdict
         molecule={report.molecule}
         clinicalData={Array.isArray(report.clinical_data) ? report.clinical_data : []}
@@ -1103,7 +1171,9 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
         patentData={Array.isArray(report.patent_data) ? report.patent_data : []}
         phoenixScore={phoenixScore ?? undefined}
         repurposingCandidates={Array.isArray(report.repurposing_candidates) ? report.repurposing_candidates : []}
+        useColor={useColor}
       />
+      </div>
     </div>
   );
 };
@@ -1187,7 +1257,7 @@ const ClinicalAndIPTab = ({ report }: any) => (
   </div>
 );
 
-const ScienceTab = ({ report, setActiveSidebar }: any) => {
+const ScienceTab = ({ report, setActiveSidebar, useColor }: any) => {
   const pd = report.pubchem_data || {};
   const td = report.target_data || {};
   const faersReactions = report.regulatory_data?.faers_reactions || [];
@@ -1314,7 +1384,7 @@ const ScienceTab = ({ report, setActiveSidebar }: any) => {
             <SourceBadge api="ClinicalTrials.gov" endpoint="clinicaltrials.gov/api/v2/studies" url="https://clinicaltrials.gov" confidence="High" note="Bubble size = trial count, color = phase advancement" />
           </h3>
           <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4 overflow-hidden">
-            <IndicationMatrix clinicalData={report.clinical_data} />
+            <IndicationMatrix clinicalData={report.clinical_data} useColor={useColor} />
           </div>
         </div>
       )}
@@ -1710,6 +1780,19 @@ export default function ReportPage() {
   const [twinVisited, setTwinVisited] = useState(false);
   const [activeSidebar, setActiveSidebar] = useState<'ai' | 'refs' | null>(null);
   const [viewMode, setViewMode] = useState<'scientist' | 'investor'>('scientist');
+  const [useColor, setUseColor] = useState(true);
+
+  // Ctrl+Shift+K toggles neutral/colored progress bars
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'K') {
+        e.preventDefault();
+        setUseColor(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   // Track when twin tab is first visited so we can lazy-mount it
   useEffect(() => {
@@ -1741,6 +1824,10 @@ export default function ReportPage() {
   const [ragInput, setRagInput] = useState('');
   const [ragLoading, setRagLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Steer mode — only changes which backend endpoint is called
+  const [chatMode, setChatMode] = useState<'ask' | 'steer'>('ask');
+  const [activeConstraints, setActiveConstraints] = useState<Array<{ type: string; field: string; value: string }>>([]);
 
   useEffect(() => {
     if (!id) return;
@@ -1788,6 +1875,43 @@ export default function ReportPage() {
     setRagMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setRagInput('');
     setRagLoading(true);
+
+    // ── STEER MODE: route to converse endpoint ──
+    if (chatMode === 'steer') {
+      setRagMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+      try {
+        const res = await fetch(`/api/converse/${id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ message: userMessage }),
+        });
+        if (!res.ok) throw new Error('Failed');
+        const data = await res.json();
+        let reply = data.response || '';
+        // Append constraint/agent badges as text
+        if (data.constraints?.length) {
+          reply += '\n\n' + data.constraints.map((c: any) => `🔹 ${c.type}: ${c.value}`).join('\n');
+        }
+        if (data.agentActions?.length) {
+          reply += '\n' + data.agentActions.map((a: any) => `↻ Re-running ${a.agent}`).join('\n');
+        }
+        if (data.needsRerun && data.rerunJobId) {
+          reply += '\n\n⚡ Re-analysis triggered — redirecting to progress...';
+          // Navigate to progress page after showing message briefly
+          const agents = (data.rerunAgents || []).join(',');
+          setTimeout(() => navigate(`/progress/${data.rerunJobId}?steer=1${agents ? `&agents=${agents}` : ''}`), 1200);
+        }
+        if (data.activeConstraints) setActiveConstraints(data.activeConstraints);
+        setRagMessages(prev => { const m = [...prev]; m[m.length - 1] = { role: 'assistant', content: reply }; return m; });
+      } catch {
+        setRagMessages(prev => { const m = [...prev]; m[m.length - 1] = { role: 'assistant', content: 'Error connecting to orchestrator. Please try again.' }; return m; });
+      }
+      setRagLoading(false);
+      return;
+    }
+
+    // ── ASK MODE: stream from Claude ──
     setRagMessages(prev => [...prev, { role: 'assistant', content: '' }]);
     try {
       const res = await fetch(`/api/claude/chat/${id}`, {
@@ -2101,7 +2225,7 @@ export default function ReportPage() {
               ) : viewMode === 'investor' ? (
                 <InvestorOverview report={report} formatMarketSize={formatMarketSize} />
               ) : (
-                <OverviewTab report={report} onStartSimulation={() => setShowSimulation(true)} structureMode={structureMode} setStructureMode={setStructureMode} setActiveSidebar={setActiveSidebar} />
+                <OverviewTab report={report} onStartSimulation={() => setShowSimulation(true)} structureMode={structureMode} setStructureMode={setStructureMode} setActiveSidebar={setActiveSidebar} useColor={useColor} />
               )}
             </div>
 
@@ -2123,7 +2247,7 @@ export default function ReportPage() {
 
             {/* Science tab */}
             <div className={activeTab === 'science' ? '' : 'hidden'}>
-              <ScienceTab report={compareReport && compareMolecule === 'B' ? compareReport : report} setActiveSidebar={setActiveSidebar} />
+              <ScienceTab report={compareReport && compareMolecule === 'B' ? compareReport : report} setActiveSidebar={setActiveSidebar} useColor={useColor} />
             </div>
 
             {/* Market tab */}
@@ -2183,6 +2307,17 @@ export default function ReportPage() {
                 </Button>
               </div>
 
+              {/* ── Active Constraints Banner ── */}
+              {activeConstraints.length > 0 && (
+                <div className="px-4 py-2 border-b border-zinc-800/40 bg-zinc-950/50 flex flex-wrap gap-1.5">
+                  {activeConstraints.map((c, i) => (
+                    <span key={i} className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                      {c.type}: {c.value}
+                    </span>
+                  ))}
+                </div>
+              )}
+
               <div className="flex-1 p-4 overflow-y-auto bg-[#000000]">
                 {ragMessages.length <= 1 ? (
                   <div className="flex flex-col items-center justify-center text-center h-full pt-6">
@@ -2240,21 +2375,46 @@ export default function ReportPage() {
                 )}
               </div>
               <div className="p-4 border-t border-zinc-800/60 bg-zinc-950">
-                <form className="flex gap-2 relative" onSubmit={(e) => handleRagSubmit(e)}>
-                  <Input value={ragInput} onChange={(e: any) => setRagInput(e.target.value)}
-                    placeholder="Ask a question..." disabled={ragLoading}
-                    className="flex-1 bg-zinc-900/80 border border-zinc-800/60 text-zinc-100 placeholder:text-zinc-500 px-4 py-6 pr-12 focus-visible:ring-1 focus-visible:ring-cyan-500/50 focus-visible:ring-offset-0 rounded-xl outline-none" />
-                  <Button type="submit" size="icon" disabled={ragLoading || !ragInput.trim()}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-zinc-800 hover:bg-zinc-700 text-white disabled:bg-transparent disabled:text-zinc-600 rounded-full h-8 w-8 flex items-center justify-center border-none">
-                    <Send size={14} />
-                  </Button>
+                <form className="flex gap-2 items-center" onSubmit={(e) => handleRagSubmit(e)}>
+                  <button
+                    type="button"
+                    onClick={() => setChatMode(chatMode === 'ask' ? 'steer' : 'ask')}
+                    title={chatMode === 'ask' ? 'Enable Steer mode — AI will translate your messages into pipeline constraints' : 'Disable Steer mode — back to normal Q&A'}
+                    className={clsx(
+                      'relative flex-none w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300 border',
+                      chatMode === 'steer'
+                        ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-400 shadow-[0_0_12px_rgba(99,102,241,0.4)]'
+                        : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700'
+                    )}
+                  >
+                    <Zap size={15} />
+                    {chatMode === 'steer' && (
+                      <span className="absolute inset-0 rounded-xl animate-ping bg-indigo-500/20 pointer-events-none" style={{ animationDuration: '2s' }} />
+                    )}
+                  </button>
+                  <div className="relative flex-1">
+                    <Input value={ragInput} onChange={(e: any) => setRagInput(e.target.value)}
+                      placeholder={chatMode === 'steer' ? 'Steer: add constraints, filter, re-run agents...' : 'Ask a question...'}
+                      disabled={ragLoading}
+                      className={clsx(
+                        'w-full bg-zinc-900/80 text-zinc-100 placeholder:text-zinc-500 px-4 py-6 pr-12 focus-visible:ring-1 focus-visible:ring-offset-0 rounded-xl outline-none border',
+                        chatMode === 'steer' ? 'border-indigo-500/30 focus-visible:ring-indigo-500/50' : 'border-zinc-800/60 focus-visible:ring-cyan-500/50'
+                      )} />
+                    <Button type="submit" size="icon" disabled={ragLoading || !ragInput.trim()}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 bg-zinc-800 hover:bg-zinc-700 text-white disabled:bg-transparent disabled:text-zinc-600 rounded-full h-8 w-8 flex items-center justify-center border-none">
+                      <Send size={14} />
+                    </Button>
+                  </div>
                 </form>
                 <div className="flex justify-between items-center mt-3 px-1">
                   <p className="text-xs text-zinc-500">
-                    AI can make mistakes. <a href="#" className="underline hover:text-zinc-300">Learn more</a>
+                    {chatMode === 'steer' ? 'Steer mode — constraints will be applied' : 'AI can make mistakes.'}
                   </p>
                   <p className="text-xs text-zinc-500 flex items-center gap-1">
-                    <Sparkles size={10} className="inline text-cyan-400" /> Gemini
+                    {chatMode === 'steer'
+                      ? <><Zap size={10} className="inline text-indigo-400" /> Orchestrator</>
+                      : <><Sparkles size={10} className="inline text-cyan-400" /> Blueprints AI</>
+                    }
                   </p>
                 </div>
               </div>

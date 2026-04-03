@@ -40,8 +40,47 @@ function pugList(data: any, ...headings: string[]): string[] {
 
 // ─── State ─────────────────────────────────────────────────────────────────
 
+export interface ResearchPlanTask {
+  agent: string;
+  objective: string;
+  priority: 'high' | 'medium' | 'low';
+}
+
+export interface ResearchPlan {
+  molecule: string;
+  tasks: ResearchPlanTask[];
+  reasoning: string;
+  generated_at: string;
+}
+
+export interface AgentAttribution {
+  agent: string;
+  insight: string;
+  evidence_count: number;
+  confidence: number;
+  timestamp: string;
+}
+
+export interface CrossDomainReasoning {
+  insight: string;
+  supporting_agents: string[];
+  evidence_weight: number;
+  reasoning_chain: string;
+}
+
+export interface Constraint {
+  type: string;
+  value: string;
+  added_at: string;
+}
+
 export const GraphState = Annotation.Root({
   molecule:        Annotation<string>(),
+  constraints:     Annotation<Constraint[]>({ reducer: (a, b) => b ?? a }),
+  rejectedCandidates: Annotation<string[]>({ reducer: (a, b) => b ?? a }),
+  researchPlan:    Annotation<ResearchPlan | null>({ reducer: (a, b) => b ?? a }),
+  agentAttributions: Annotation<AgentAttribution[]>({ reducer: (a, b) => [...(a || []), ...(b || [])] }),
+  crossDomainReasoning: Annotation<CrossDomainReasoning[]>({ reducer: (a, b) => b ?? a }),
   clinicalData:    Annotation<any[]>({ reducer: (a, b) => b ?? a }),
   literatureData:  Annotation<any[]>({ reducer: (a, b) => b ?? a }),
   regulatoryData:  Annotation<any>({ reducer: (a, b) => b ?? a }),
@@ -60,6 +99,108 @@ export const GraphState = Annotation.Root({
 });
 
 // ─── Agents ────────────────────────────────────────────────────────────────
+
+// Planner Agent: generates a structured research plan using LLM before agents run
+async function planResearch(state: typeof GraphState.State) {
+  const keys = getGroqKeys();
+  const constraints = state.constraints || [];
+  const rejected = state.rejectedCandidates || [];
+
+  const constraintContext = constraints.length > 0
+    ? `\nACTIVE CONSTRAINTS:\n${constraints.map(c => `- ${c.type}: ${c.value}`).join('\n')}`
+    : '';
+  const rejectedContext = rejected.length > 0
+    ? `\nREJECTED CANDIDATES (exclude from analysis): ${rejected.join(', ')}`
+    : '';
+
+  const prompt = `You are a drug repurposing research planner. Given a molecule name and optional constraints, generate a structured research plan that assigns tasks to specialized agents.
+
+MOLECULE: "${state.molecule}"${constraintContext}${rejectedContext}
+
+Available agents and their capabilities:
+- PubChemAgent: Validates molecule existence, retrieves molecular properties, pharmacology, ADME data, toxicity
+- ClinicalAgent: Queries ClinicalTrials.gov for clinical trial data across all phases
+- LiteratureAgent: Searches PubMed for peer-reviewed publications and clinical evidence
+- RegulatoryAgent: Queries FDA labels, FAERS adverse events, orphan/breakthrough designations
+- TargetAgent: Queries Open Targets for drug-target interactions, linked diseases, mechanisms of action
+- PatentAgent: Searches PubChem patent database for IP landscape
+- AnalogAgent: Finds structurally similar molecules and analyzes their clinical trial histories
+
+For each agent, specify:
+1. Whether it should be activated (all agents run by default unless constraints make one irrelevant)
+2. A specific research objective tailored to this molecule
+3. Priority level (high/medium/low) based on what matters most for this molecule's repurposing potential
+
+Respond with ONLY valid JSON in this format:
+{
+  "tasks": [
+    { "agent": "PubChemAgent", "objective": "specific objective", "priority": "high" },
+    ...
+  ],
+  "reasoning": "2-3 sentences explaining the research strategy"
+}`;
+
+  for (const key of keys) {
+    try {
+      const response = await axios.post(
+        'https://api.groq.com/openai/v1/chat/completions',
+        {
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            { role: 'system', content: 'You only respond with perfectly valid JSON. No text outside the JSON object.' },
+            { role: 'user', content: prompt }
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.2,
+        },
+        { headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' }, timeout: 12000 }
+      );
+
+      if (response.status === 429 || response.status === 401) continue;
+      if (response.status !== 200) continue;
+
+      const content = response.data.choices?.[0]?.message?.content
+        ?.replace(/```json/g, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(content);
+
+      const plan: ResearchPlan = {
+        molecule: state.molecule,
+        tasks: (parsed.tasks || []).map((t: any) => ({
+          agent: t.agent || 'Unknown',
+          objective: t.objective || '',
+          priority: ['high', 'medium', 'low'].includes(t.priority) ? t.priority : 'medium',
+        })),
+        reasoning: parsed.reasoning || '',
+        generated_at: new Date().toISOString(),
+      };
+
+      console.log(`[PlannerAgent] Generated plan for ${state.molecule}: ${plan.tasks.length} tasks — ${plan.reasoning.substring(0, 100)}`);
+      return { researchPlan: plan };
+    } catch (e: any) {
+      console.warn(`[PlannerAgent] Key failed: ${e.message}, trying next...`);
+      continue;
+    }
+  }
+
+  // Fallback: activate all agents with default objectives
+  console.warn('[PlannerAgent] All keys failed, using default plan');
+  return {
+    researchPlan: {
+      molecule: state.molecule,
+      tasks: [
+        { agent: 'PubChemAgent', objective: `Validate ${state.molecule} and retrieve molecular properties`, priority: 'high' as const },
+        { agent: 'ClinicalAgent', objective: `Find all clinical trials involving ${state.molecule}`, priority: 'high' as const },
+        { agent: 'LiteratureAgent', objective: `Search PubMed for ${state.molecule} clinical evidence`, priority: 'high' as const },
+        { agent: 'RegulatoryAgent', objective: `Check FDA labels and adverse events for ${state.molecule}`, priority: 'medium' as const },
+        { agent: 'TargetAgent', objective: `Identify drug targets and linked diseases for ${state.molecule}`, priority: 'medium' as const },
+        { agent: 'PatentAgent', objective: `Search patent landscape for ${state.molecule}`, priority: 'medium' as const },
+        { agent: 'AnalogAgent', objective: `Find structural analogs of ${state.molecule}`, priority: 'low' as const },
+      ],
+      reasoning: `Standard comprehensive analysis for ${state.molecule} across all available domains.`,
+      generated_at: new Date().toISOString(),
+    } as ResearchPlan
+  };
+}
 
 // PubChem Agent: existence check + comprehensive molecular + pharmacological data
 async function fetchPubChemData(state: typeof GraphState.State) {
@@ -160,7 +301,14 @@ async function fetchPubChemData(state: typeof GraphState.State) {
         // Toxicity
         ld50_text,
         tox_summary,
-      }
+      },
+      agentAttributions: [{
+        agent: 'PubChemAgent',
+        insight: `Validated ${state.molecule} (CID: ${cid}). ${mechanism_of_action ? 'MOA: ' + mechanism_of_action.substring(0, 100) : 'No MOA data.'} ${associated_diseases?.length ? associated_diseases.length + ' associated diseases found.' : ''}`,
+        evidence_count: [mechanism_of_action, absorption, half_life, protein_binding, metabolism].filter(Boolean).length + (associated_diseases?.length || 0),
+        confidence: mechanism_of_action ? 0.9 : 0.6,
+        timestamp: new Date().toISOString(),
+      }] as AgentAttribution[],
     };
   } catch (error: any) {
     if (error?.response?.status === 404) {
@@ -273,7 +421,17 @@ async function fetchSimilarMolecules(state: typeof GraphState.State) {
       .filter(r => r.status === 'fulfilled' && r.value)
       .map(r => (r as PromiseFulfilledResult<any>).value);
 
-    return { similarMolecules };
+    const highPotential = similarMolecules.filter((m: any) => m.repurposing_potential === 'High' || m.repurposing_potential === 'Moderate');
+    return {
+      similarMolecules,
+      agentAttributions: [{
+        agent: 'AnalogAgent',
+        insight: `Found ${similarMolecules.length} structural analogs (Tanimoto ≥90%). ${highPotential.length} with repurposing potential. ${similarMolecules.filter((m: any) => m.failed_trials > 0).length} have failed trial history informing risk assessment.`,
+        evidence_count: similarMolecules.length,
+        confidence: similarMolecules.length > 3 ? 0.8 : similarMolecules.length > 0 ? 0.6 : 0.2,
+        timestamp: new Date().toISOString(),
+      }] as AgentAttribution[],
+    };
   } catch (error: any) {
     console.error('[SimilarityAgent] API failed:', error.message);
     return { similarMolecules: null };
@@ -283,25 +441,84 @@ async function fetchSimilarMolecules(state: typeof GraphState.State) {
 // Clinical Agent (ClinicalTrials.gov)
 async function fetchClinicalData(state: typeof GraphState.State) {
   try {
-    // Use query.intr (intervention search) instead of query.term (full-text search)
-    // query.term matches study titles, acronyms, and conditions — returning irrelevant
-    // results for non-drug words. query.intr only matches actual drug/intervention names.
-    const res = await axios.get(
-      `https://clinicaltrials.gov/api/v2/studies?query.intr=${encodeURIComponent(state.molecule)}&pageSize=25`
-    );
-    return {
-      clinicalData: (res.data.studies || []).map((s: any) => ({
+    const constraints = state.constraints || [];
+    const rejected = state.rejectedCandidates || [];
+
+    // Build query — add condition filter if require_indication constraint exists
+    const indicationConstraint = constraints.find(c => c.type === 'require_indication');
+    let url = `https://clinicaltrials.gov/api/v2/studies?query.intr=${encodeURIComponent(state.molecule)}&pageSize=25`;
+    if (indicationConstraint) {
+      url += `&query.cond=${encodeURIComponent(indicationConstraint.value)}`;
+    }
+
+    // Add phase filter if require_phase constraint exists
+    const phaseConstraint = constraints.find(c => c.type === 'require_phase');
+
+    const res = await axios.get(url);
+    let clinicalResults = (res.data.studies || []).map((s: any) => ({
         id:        s.protocolSection?.identificationModule?.nctId,
         nctId:     s.protocolSection?.identificationModule?.nctId,
         title:     s.protocolSection?.identificationModule?.briefTitle || 'Untitled Study',
         status:    s.protocolSection?.statusModule?.overallStatus || 'UNKNOWN',
         phase:     s.protocolSection?.designModule?.phases?.[0] || 'Unknown',
         condition: s.protocolSection?.conditionsModule?.conditions?.[0] || 'Unknown',
+        conditions: s.protocolSection?.conditionsModule?.conditions || [],
         startDate: s.protocolSection?.statusModule?.startDateStruct?.date || null,
         completionDate: s.protocolSection?.statusModule?.completionDateStruct?.date || null,
         lastUpdateDate: s.protocolSection?.statusModule?.lastUpdatePostDateStruct?.date || null,
         enrollmentCount: s.protocolSection?.designModule?.enrollmentInfo?.count || null,
-      }))
+      }));
+
+    // Apply constraint filtering
+    let filtered = clinicalResults;
+
+    // Phase filtering
+    if (phaseConstraint) {
+      const minPhase = parseInt(phaseConstraint.value) || 0;
+      filtered = filtered.filter((t: any) => {
+        const phaseStr = t.phase || '';
+        const phaseNum = parseInt(phaseStr.replace(/[^0-9]/g, '')) || 0;
+        return phaseNum >= minPhase;
+      });
+    }
+
+    // Toxicity exclusion
+    for (const c of constraints) {
+      if (c.type === 'exclude_toxicity') {
+        filtered = filtered.filter((t: any) => {
+          const allConditions = (t.conditions || [t.condition]).join(' ').toLowerCase();
+          const title = (t.title || '').toLowerCase();
+          return !allConditions.includes(c.value.toLowerCase()) && !title.includes(c.value.toLowerCase());
+        });
+      }
+      if (c.type === 'exclude_condition') {
+        filtered = filtered.filter((t: any) => {
+          const allConditions = (t.conditions || [t.condition]).join(' ').toLowerCase();
+          return !allConditions.includes(c.value.toLowerCase());
+        });
+      }
+    }
+
+    // Rejected candidates
+    for (const r of rejected) {
+      filtered = filtered.filter((t: any) => {
+        const allConditions = (t.conditions || [t.condition]).join(' ').toLowerCase();
+        return !allConditions.includes(r.toLowerCase());
+      });
+    }
+
+    const phase3Plus = filtered.filter((t: any) => t.phase?.includes('3') || t.phase?.includes('4')).length;
+    const recruiting = filtered.filter((t: any) => t.status === 'RECRUITING').length;
+
+    return {
+      clinicalData: filtered,
+      agentAttributions: [{
+        agent: 'ClinicalAgent',
+        insight: `Found ${filtered.length} clinical trials (${phase3Plus} Phase 3/4, ${recruiting} recruiting). Conditions: ${[...new Set(filtered.map((t: any) => t.condition))].slice(0, 4).join(', ')}.`,
+        evidence_count: filtered.length,
+        confidence: Math.min(0.3 + filtered.length * 0.05, 0.95),
+        timestamp: new Date().toISOString(),
+      }] as AgentAttribution[],
     };
   } catch (err: any) { 
     console.error('[ClinicalTrials] API failed:', err.message);
@@ -312,7 +529,12 @@ async function fetchClinicalData(state: typeof GraphState.State) {
 // Literature Agent (PubMed)
 async function fetchLiteratureData(state: typeof GraphState.State) {
   try {
-    const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(state.molecule)}+AND+clinical+trial&retmode=json&retmax=15`;
+    // Add indication constraint to PubMed query if present
+    const constraints = state.constraints || [];
+    const indicationConstraint = constraints.find(c => c.type === 'require_indication');
+    const indicationTerm = indicationConstraint ? `+AND+${encodeURIComponent(indicationConstraint.value)}` : '';
+
+    const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(state.molecule)}+AND+clinical+trial${indicationTerm}&retmode=json&retmax=15`;
     const searchRes = await axios.get(searchUrl);
     
     // Total total_pubmed_papers count for ALL literature (bias check)
@@ -328,9 +550,7 @@ async function fetchLiteratureData(state: typeof GraphState.State) {
     if (!pmids || searchRes.data.esearchresult?.count === '0') return { literatureData: [], total_pubmed_papers };
 
     const summaryRes = await axios.get(`https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${pmids}&retmode=json`);
-    return {
-      total_pubmed_papers,
-      literatureData: Object.values(summaryRes.data.result || {})
+    const litData = Object.values(summaryRes.data.result || {})
         .filter((p: any) => p.uid)
         .map((p: any) => ({
           id:      p.uid,
@@ -338,7 +558,17 @@ async function fetchLiteratureData(state: typeof GraphState.State) {
           journal: p.fulljournalname,
           year:    p.pubdate?.split(' ')[0] || 'Unknown',
           authors: p.authors?.map((a: any) => a.name) || [],
-        }))
+        }));
+    return {
+      total_pubmed_papers,
+      literatureData: litData,
+      agentAttributions: [{
+        agent: 'LiteratureAgent',
+        insight: `Found ${litData.length} relevant publications (${total_pubmed_papers} total in PubMed corpus). Top journals: ${[...new Set(litData.map((p: any) => p.journal))].slice(0, 3).join(', ')}.`,
+        evidence_count: litData.length,
+        confidence: Math.min(0.2 + litData.length * 0.03, 0.9),
+        timestamp: new Date().toISOString(),
+      }] as AgentAttribution[],
     };
   } catch (err: any) { 
     console.error('[PubMed] API failed:', err.message);
@@ -423,7 +653,14 @@ async function fetchRegulatoryData(state: typeof GraphState.State) {
         indications: indicationsList[0]?.substring(0, 200) || 'None found',
         warnings: allResults[0]?.boxed_warning?.[0]?.substring(0, 200) || 'None',
         faers_reactions,
-      }
+      },
+      agentAttributions: [{
+        agent: 'RegulatoryAgent',
+        insight: `${indicationsList.length} FDA indications found. ${faers_reactions.length} FAERS adverse reactions tracked. ${beneficial_faers_hit ? 'Beneficial FAERS signal detected.' : ''} Warnings: ${allResults[0]?.boxed_warning?.[0]?.substring(0, 80) || 'None'}.`,
+        evidence_count: indicationsList.length + faers_reactions.length,
+        confidence: indicationsList.length > 0 ? 0.85 : 0.3,
+        timestamp: new Date().toISOString(),
+      }] as AgentAttribution[],
     };
   } catch (err: any) {
     console.error('[OpenFDA] API failed:', err.message);
@@ -542,7 +779,14 @@ async function fetchTargetData(state: typeof GraphState.State) {
         diseases,
         mechanisms,
         source: 'Open Targets Platform',
-      }
+      },
+      agentAttributions: [{
+        agent: 'TargetAgent',
+        insight: `${targetsFound} drug targets identified via Open Targets (${chemblId}). ${diseasesFound} linked diseases. ${mechanisms.length} mechanisms of action: ${mechanisms.slice(0, 2).map((m: any) => m.description).join('; ')}.${drug.hasBeenWithdrawn ? ' WARNING: Drug has been withdrawn.' : ''}`,
+        evidence_count: targetsFound + diseasesFound,
+        confidence: score,
+        timestamp: new Date().toISOString(),
+      }] as AgentAttribution[],
     };
   } catch (err: any) {
     console.error('[TargetAgent] Open Targets API failed:', err.message);
@@ -584,7 +828,17 @@ async function fetchPatentData(state: typeof GraphState.State) {
     }
     // De-duplicate array
     const dedupedInfoString = patents.filter((v,i,a)=>a.findIndex(v2=>(v2.id===v.id))===i);
-    return { patentData: dedupedInfoString.slice(0, 5) };
+    const patentResults = dedupedInfoString.slice(0, 5);
+    return {
+      patentData: patentResults,
+      agentAttributions: [{
+        agent: 'PatentAgent',
+        insight: `${patentResults.length} patents found. ${patentResults.length === 0 ? 'Open IP landscape — no patent barriers.' : `IP filings: ${patentResults.map(p => p.id).join(', ')}.`}`,
+        evidence_count: patentResults.length,
+        confidence: patentResults.length === 0 ? 0.85 : 0.4,
+        timestamp: new Date().toISOString(),
+      }] as AgentAttribution[],
+    };
   } catch (e: any) {
     console.error('[PatentAgent] API failed:', e.message);
     return { patentData: null };
@@ -602,6 +856,91 @@ async function fetchPatentData(state: typeof GraphState.State) {
         }
 
         return keys;
+      }
+
+      // Cross-domain reasoning builder — identifies insights that span multiple agent domains
+      function buildCrossDomainReasoning(
+        state: typeof GraphState.State,
+        synthesisResult: any,
+        phoenixMath: any
+      ): CrossDomainReasoning[] {
+        const reasoning: CrossDomainReasoning[] = [];
+        const clinicalData = state.clinicalData || [];
+        const regulatoryData = state.regulatoryData;
+        const literatureData = state.literatureData || [];
+        const similarMolecules = state.similarMolecules || [];
+        const targetData = state.targetData;
+
+        // Clinical + Regulatory cross-domain: trials exist but no FDA label
+        if (clinicalData.length > 0 && regulatoryData?.fda_labels?.length === 0) {
+          reasoning.push({
+            domains: ['ClinicalAgent', 'RegulatoryAgent'],
+            insight: `${clinicalData.length} clinical trials found but no FDA-approved labels — ${state.molecule} may be in pre-approval or investigational stage.`,
+            confidence: 0.85,
+            supporting_evidence: [
+              `${clinicalData.length} trials on ClinicalTrials.gov`,
+              `0 FDA label records`,
+            ],
+          });
+        }
+
+        // Clinical + Analog cross-domain: analogs failed where this drug is being tested
+        const failedAnalogs = similarMolecules.filter((m: any) => m.failed_trials > 0);
+        if (failedAnalogs.length > 0 && clinicalData.length > 0) {
+          const failedConditions = [...new Set(failedAnalogs.flatMap((m: any) => m.failed_conditions || []))];
+          const activeConditions = [...new Set(clinicalData.map((t: any) => t.condition).filter(Boolean))];
+          const overlap = failedConditions.filter(c => activeConditions.some(ac => ac.toLowerCase().includes(c.toLowerCase())));
+          if (overlap.length > 0) {
+            reasoning.push({
+              domains: ['AnalogAgent', 'ClinicalAgent'],
+              insight: `Structural analogs failed trials for ${overlap.join(', ')} — but ${state.molecule} has active trials in the same space, suggesting differentiated mechanism.`,
+              confidence: 0.75,
+              supporting_evidence: [
+                `${failedAnalogs.length} analogs with failed trials`,
+                `Overlap conditions: ${overlap.join(', ')}`,
+              ],
+            });
+          }
+        }
+
+        // Literature + Target cross-domain: published MOA aligns with target associations
+        if (literatureData.length > 0 && targetData?.associations?.length > 0) {
+          reasoning.push({
+            domains: ['LiteratureAgent', 'TargetAgent'],
+            insight: `${literatureData.length} publications and ${targetData.associations.length} target-disease associations found — literature validates the mechanistic hypothesis from Open Targets.`,
+            confidence: 0.8,
+            supporting_evidence: [
+              `${literatureData.length} PubMed articles`,
+              `${targetData.associations.length} target associations from Open Targets`,
+            ],
+          });
+        }
+
+        // Regulatory + Patent cross-domain: patent protection with regulatory signals
+        const patentData = state.patentData || [];
+        if (patentData.length > 0 && regulatoryData?.fda_labels?.length > 0) {
+          reasoning.push({
+            domains: ['PatentAgent', 'RegulatoryAgent'],
+            insight: `${patentData.length} patents found alongside FDA-approved labels — IP landscape may affect repurposing freedom-to-operate.`,
+            confidence: 0.7,
+            supporting_evidence: [
+              `${patentData.length} patent records`,
+              `${regulatoryData.fda_labels.length} FDA labels`,
+            ],
+          });
+        }
+
+        // Phoenix score interpretation as cross-domain
+        if (phoenixMath.phoenix_score >= 7) {
+          reasoning.push({
+            domains: ['SynthesisAgent'],
+            insight: `Phoenix Score ${phoenixMath.phoenix_score}/10 indicates strong repurposing viability based on converging evidence across regulatory (${phoenixMath.breakdown.regulatory}), clinical (${phoenixMath.breakdown.clinical}), and mechanistic (${phoenixMath.breakdown.mechanism}) dimensions.`,
+            confidence: phoenixMath.phoenix_score / 10,
+            supporting_evidence: Object.entries(phoenixMath.breakdown).map(([k, v]) => `${k}: ${v}`),
+          });
+        }
+
+        return reasoning;
       }
 
       // LLM Synthesis Agent (Groq — llama-3.3-70b)
@@ -826,7 +1165,15 @@ Output a JSON object with exactly 4 keys explaining the data:
       top_risks:         resultData.top_risks         || ['No risks identified.'],
       phoenix_score:     phoenixMath.phoenix_score,
       phoenix_breakdown: phoenixMath.breakdown,
-      phoenix_explanation: `Deterministic formula output: R=${phoenixMath.breakdown.regulatory}, D=${phoenixMath.breakdown.indication_distance}, C=${phoenixMath.breakdown.clinical}, M=${phoenixMath.breakdown.mechanism}, S=${phoenixMath.breakdown.serendipity}`
+      phoenix_explanation: `Deterministic formula output: R=${phoenixMath.breakdown.regulatory}, D=${phoenixMath.breakdown.indication_distance}, C=${phoenixMath.breakdown.clinical}, M=${phoenixMath.breakdown.mechanism}, S=${phoenixMath.breakdown.serendipity}`,
+      agentAttributions: [{
+        agent: 'SynthesisAgent',
+        insight: `Phoenix Score: ${phoenixMath.phoenix_score}/10. Viability: ${resultData.viabilityScore}/10. ${(resultData.top_opportunities || []).length} opportunities, ${(resultData.top_risks || []).length} risks identified.`,
+        evidence_count: (state.clinicalData?.length || 0) + (state.literatureData?.length || 0),
+        confidence: phoenixMath.phoenix_score / 10,
+        timestamp: new Date().toISOString(),
+      }] as AgentAttribution[],
+      crossDomainReasoning: buildCrossDomainReasoning(state, resultData, phoenixMath),
     };
   } catch (error) {
     console.error('[JudgeAgent] Error:', error);
@@ -885,13 +1232,14 @@ function computePhoenixScore(signals: any) {
 
 // ─── Graph ──────────────────────────────────────────────────────────────────
 //
-//  START ──→ fetchPubChem ──→ fetchSimilarMolecules ──→ synthesize ──→ END
-//  START ──→ fetchClinical ────────────────────────────→ synthesize
-//  START ──→ fetchLiterature ──────────────────────────→ synthesize
-//  START ──→ fetchRegulatory ──────────────────────────→ synthesize
-//  START ──→ fetchTarget ──────────────────────────────→ synthesize
+//  START ──→ planResearch ──→ fetchPubChem ──→ fetchSimilarMolecules ──→ synthesize ──→ END
+//                         ──→ fetchClinical ────────────────────────────→ synthesize
+//                         ──→ fetchLiterature ──────────────────────────→ synthesize
+//                         ──→ fetchRegulatory ──────────────────────────→ synthesize
+//                         ──→ fetchTarget ──────────────────────────────→ synthesize
 
 const workflow = new StateGraph(GraphState)
+  .addNode('planResearch',   planResearch)
   .addNode('fetchPubChem',   fetchPubChemData)
   .addNode('fetchSimilar',   fetchSimilarMolecules)
   .addNode('fetchClinical',  fetchClinicalData)
@@ -901,17 +1249,22 @@ const workflow = new StateGraph(GraphState)
   .addNode('fetchPatent',    fetchPatentData)
   .addNode('synthesize',     synthesizeAndEvaluate)
 
-  // PubChem → SimilarMolecules (sequential: needs CID)
-  .addEdge(START,          'fetchPubChem')
-  .addEdge('fetchPubChem', 'fetchSimilar')
-  .addEdge('fetchPubChem', 'fetchPatent')
-  .addEdge('fetchSimilar', 'synthesize')
+  // START → PlannerAgent (generates research plan first)
+  .addEdge(START,            'planResearch')
 
-  // Independent parallel fetchers → synthesize
-  .addEdge(START,           'fetchClinical')
-  .addEdge(START,           'fetchLiterature')
-  .addEdge(START,           'fetchRegulatory')
-  .addEdge(START,           'fetchTarget')
+  // PlannerAgent → all fetchers in parallel
+  .addEdge('planResearch',   'fetchPubChem')
+  .addEdge('planResearch',   'fetchClinical')
+  .addEdge('planResearch',   'fetchLiterature')
+  .addEdge('planResearch',   'fetchRegulatory')
+  .addEdge('planResearch',   'fetchTarget')
+
+  // PubChem → SimilarMolecules + Patent (sequential: needs CID)
+  .addEdge('fetchPubChem',   'fetchSimilar')
+  .addEdge('fetchPubChem',   'fetchPatent')
+  .addEdge('fetchSimilar',   'synthesize')
+
+  // All fetchers → synthesize (fan-in)
   .addEdge('fetchClinical',  'synthesize')
   .addEdge('fetchLiterature','synthesize')
   .addEdge('fetchRegulatory','synthesize')
@@ -922,22 +1275,27 @@ const workflow = new StateGraph(GraphState)
 
 export const multiAgentPipeline = workflow.compile();
 
-export async function runPipeline(molecule: string) {
+export async function runPipeline(molecule: string, constraints?: Constraint[]) {
   const result = await multiAgentPipeline.invoke({
     molecule,
-    clinicalData:     [],
-    literatureData:   [],
-    regulatoryData:   null,
-    targetData:       null,
-    patentData:       null,
-    pubchemData:      null,
-    similarMolecules: [],
-    analysisReport:   '',
-    viabilityScore:   0,
-    top_opportunities:[],
-    top_risks:        [],
-    phoenix_score:    0,
-    phoenix_breakdown:{},
+    constraints:       constraints || [],
+    rejectedCandidates:[],
+    researchPlan:      null,
+    agentAttributions: [],
+    crossDomainReasoning: [],
+    clinicalData:      [],
+    literatureData:    [],
+    regulatoryData:    null,
+    targetData:        null,
+    patentData:        null,
+    pubchemData:       null,
+    similarMolecules:  [],
+    analysisReport:    '',
+    viabilityScore:    0,
+    top_opportunities: [],
+    top_risks:         [],
+    phoenix_score:     0,
+    phoenix_breakdown: {},
     phoenix_explanation: ''
   });
 

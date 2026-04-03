@@ -60,13 +60,13 @@ export function TypewriterHero({
   return (
     <span className={className}>
       {staticPrefix}
-      <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400">
+      <span className="text-transparent bg-clip-text bg-gradient-to-r from-zinc-400 to-zinc-500 dark:from-zinc-400 dark:to-zinc-600">
         {displayText}
       </span>
       <motion.span
         animate={{ opacity: [1, 0] }}
         transition={{ duration: 0.5, repeat: Infinity, repeatType: 'reverse' }}
-        className="inline-block w-[3px] h-[1em] bg-indigo-400 ml-1 align-middle rounded-full"
+        className="inline-block w-[3px] h-[1em] bg-zinc-400 ml-1 align-middle rounded-full"
       />
     </span>
   );
