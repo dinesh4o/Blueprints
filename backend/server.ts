@@ -22,6 +22,7 @@ import passportConfig from './src/config/passport';
 import authRoutes from './src/routes/auth';
 import communityRoutes from './src/routes/community';
 import dashboardRoutes from './src/routes/dashboard';
+import adminRoutes from './src/routes/admin';
 import { Job } from './src/models/Job';
 
 import { generateReportLaTeX } from './src/lib/pdfGenerator';
@@ -301,9 +302,30 @@ function buildRepurposingCandidates(clinicalData: any[], marketData: Record<stri
     .slice(0, 12);
 }
 
+async function seedAdminUser() {
+  try {
+    const { User } = await import('./src/models/User');
+    const existing = await User.findOne({ email: 'admin@blueprints.demo' });
+    if (!existing) {
+      await User.create({
+        email: 'admin@blueprints.demo',
+        name: 'Admin',
+        password: 'Admin@1234',
+        authProvider: 'local',
+        role: 'admin',
+        plan: 'organization',
+        isActive: true,
+      });
+      console.log('[Seed] Demo admin created: admin@blueprints.demo / Admin@1234');
+    }
+  } catch (err) {
+    console.warn('[Seed] Admin seed skipped:', err);
+  }
+}
+
 async function startServer() {
   // Connect to MongoDB in background — don't block server startup
-  connectDB().catch(() => {});
+  connectDB().then(() => seedAdminUser()).catch(() => {});
 
   const app = express();
   const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -359,6 +381,7 @@ async function startServer() {
   app.use('/api/auth', authRoutes);
   app.use('/api/community', communityRoutes);
   app.use('/api/dashboard', dashboardRoutes);
+  app.use('/api/admin', adminRoutes);
 
   // In-memory store for jobs and reports (simulating MongoDB)
   const jobs = new Map<string, any>();
@@ -583,14 +606,22 @@ async function startServer() {
   // ─── Groq Ask AI — SSE Streaming endpoint ──────────────────────────────
   app.post('/api/claude/chat/:id', async (req, res) => {
     const reportId = req.params.id;
-    const { message } = req.body;
+    const { message, steerVersionIds } = req.body;
     const report = reports.get(reportId);
     const keys = getGroqKeys('chat');
 
     if (keys.length === 0) {
       return res.status(500).json({ error: 'GROQ_API_KEYS not configured on the server.' });
     }
-// 
+//
+    // Collect all steered versions' reports (those the frontend tracked)
+    const steerVersionReports: any[] = [];
+    if (Array.isArray(steerVersionIds)) {
+      for (const vid of steerVersionIds) {
+        const vReport = reports.get(vid);
+        if (vReport) steerVersionReports.push(vReport);
+      }
+    } 
     const mol       = report?.molecule || 'Unknown compound';
     const topOpp    = (report?.repurposing_candidates || []).slice(0, 3)
       .map((c: any) => `${c.condition} (viability: ${c.repurposing_score}/10)`).join('; ');
@@ -612,6 +643,14 @@ async function startServer() {
     const candidateSummary = (report?.repurposing_candidates || []).slice(0, 5).map((c: any) =>
       `• ${c.condition} — Score: ${c.repurposing_score}/10, Max Phase: ${c.max_phase || 'N/A'}, Trials: ${c.trial_count ?? 'N/A'}, Market: $${c.market_size_usd_billion?.toFixed(1) || '?'}B`
     ).join('\n') || 'None identified.';
+
+    // Include eliminated/low-score candidates so the AI can discuss them
+    const eliminatedCandidates = (report?.repurposing_candidates || []).filter((c: any) => (c.repurposing_score ?? 10) < 4);
+    const eliminatedSummary = eliminatedCandidates.length > 0
+      ? eliminatedCandidates.slice(0, 5).map((c: any) =>
+          `• ${c.condition} — Score: ${c.repurposing_score}/10 (eliminated: insufficient evidence or high risk)`
+        ).join('\n')
+      : '';
 
     const debateSummary = report?.debate_data
       ? `ADVOCATE: ${(report.debate_data.advocate || '').slice(0, 300)}...\nSKEPTIC: ${(report.debate_data.skeptic || '').slice(0, 300)}...\nJUDGE VERDICT: ${(report.debate_data.judge || '').slice(0, 300)}...`
@@ -635,6 +674,7 @@ async function startServer() {
       `COMPOUND: ${mol}\n` +
       `PHOENIX REPURPOSING SCORE: ${report?.phoenix_score ?? 'N/A'}/10\n\n` +
       `═══ REPURPOSING CANDIDATES ═══\n${candidateSummary}\n\n` +
+      (eliminatedSummary ? `═══ ELIMINATED / DEPRIORITIZED CANDIDATES ═══\n${eliminatedSummary}\n\n` : '') +
       `═══ CLINICAL TRIALS (${(report?.clinical_data || []).length} found) ═══\n${clinicalSummary}\n\n` +
       `═══ PATENT & IP DATA (${(report?.patent_data || []).length} found) ═══\n${patentSummary}\n\n` +
       `═══ PUBLICATIONS (${(report?.literature_data || []).length} found) ═══\n${litSummary}\n\n` +
@@ -642,6 +682,22 @@ async function startServer() {
       `═══ KEY RISK FACTORS ═══\n${topRisks || 'None identified'}\n\n` +
       `═══ MARKET ANALYSIS ═══\n${(report?.market_analysis || []).map((m: any) => `${m.condition} $${m.market_size_usd_billion?.toFixed(1)}B (${m.growth_rate_pct}% CAGR)`).slice(0, 5).join('; ') || 'N/A'}\n\n` +
       (debateSummary ? `═══ ADVOCATE / SKEPTIC DEBATE ═══\n${debateSummary}\n\n` : '') +
+      // Steered versions — compact diff-style summaries so the AI can compare across runs
+      (steerVersionReports.length > 0
+        ? steerVersionReports.map((vr: any, i: number) => {
+            const vCandidates = (vr?.repurposing_candidates || []).slice(0, 5)
+              .map((c: any) => `${c.condition} ${c.repurposing_score}/10`).join(', ');
+            const vRisks = (vr?.ai_analysis?.top_risks || []).slice(0, 2).join('; ');
+            const vDebate = vr?.debate_data
+              ? `Verdict: ${(vr.debate_data.judge || '').slice(0, 200)}`
+              : '';
+            return `═══ STEERED VERSION ${i + 1} — ${vr?.molecule || 'Unknown'} (Score: ${vr?.phoenix_score ?? '?'}/10) ═══\n` +
+              `Candidates: ${vCandidates || 'N/A'}\n` +
+              `Risks: ${vRisks || 'N/A'}\n` +
+              (vDebate ? `${vDebate}\n` : '') +
+              `Trials: ${(vr?.clinical_data || []).length} | Patents: ${(vr?.patent_data || []).length} | Publications: ${(vr?.literature_data || []).length}\n`;
+          }).join('\n') + '\n'
+        : '') +
       `INSTRUCTIONS:\n` +
       `You are a world-class pharmaceutical scientist. The report data above is your primary source, but you also have extensive biomedical knowledge.\n\n` +
       `CRITICAL RULES:\n` +
@@ -650,7 +706,9 @@ async function startServer() {
       `3. When the report has data, cite specific IDs/numbers. When it has 0 results for something, use your knowledge briefly — don't apologize or explain that "the report doesn't have data."\n` +
       `4. Never fabricate trial NCT IDs. You may link to search pages like https://clinicaltrials.gov/search?term=<compound> if relevant.\n` +
       `5. If a question is completely unrelated to medicine/pharmacology, politely decline.\n` +
-      `6. Sound like a knowledgeable scientist in a conversation, not a report generator.`;
+      `6. Sound like a knowledgeable scientist in a conversation, not a report generator.\n` +
+      `7. You CAN and SHOULD answer questions about eliminated or deprioritized candidates. Explain WHY they were eliminated (low score, safety flags, insufficient evidence) using the data above. Do not refuse to discuss them.\n` +
+      `8. When steered versions are present, you can compare results across versions (e.g. "in v1 the top candidate was X, in the current run it is Y"). Reference steered versions by "Steered Version 1", "Steered Version 2", etc.`;
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -859,13 +917,36 @@ async function startServer() {
     const isSimpleSingleWord = /^[A-Za-z]{3,20}$/.test(raw);
     if (!isSimpleSingleWord) return true;
 
+    // Check OpenFDA first (covers US drug names)
     const hasDrugLabelMatch = await hasOpenFDADrugLabelMatch(raw);
-    if (!hasDrugLabelMatch) {
-      console.warn(`[Validate] Rejected ambiguous term "${raw}" (PubChem match but no OpenFDA drug label name match).`);
-      return false;
+    if (hasDrugLabelMatch) return true;
+
+    // If OpenFDA misses (e.g. international names like "Paracetamol" vs US "Acetaminophen"),
+    // check PubChem synonyms for pharmaceutical markers (INN stems, DrugBank IDs, etc.)
+    if (primaryCID != null) {
+      try {
+        const synRes = await fetch(
+          `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${primaryCID}/synonyms/JSON`,
+          { signal: AbortSignal.timeout(8000) }
+        );
+        if (synRes.ok) {
+          const synData = await synRes.json() as any;
+          const synonyms: string[] = synData?.InformationList?.Information?.[0]?.Synonym || [];
+          // If any synonym contains DrugBank, USAN, INN, BAN, JAN markers or known drug DB prefixes, it's a drug
+          const drugMarkers = /drugbank|usan|inn\b|ban\b|jan\b|usp\b|nf\b|pharma|medication|tablet|capsule/i;
+          if (synonyms.some(s => drugMarkers.test(s))) return true;
+          // Also try a single fast OpenFDA check with the first different synonym (usually the INN/USAN name)
+          const altName = synonyms.find(s => !matchesDrugTerm(s, raw) && /^[A-Za-z]{3,30}$/.test(s));
+          if (altName) {
+            const altMatch = await hasOpenFDADrugLabelMatch(altName);
+            if (altMatch) return true;
+          }
+        }
+      } catch {}
     }
 
-    return true;
+    console.warn(`[Validate] Rejected ambiguous term "${raw}" (PubChem match but no OpenFDA drug label name match).`);
+    return false;
   }
 
   interface PromptConstraints {

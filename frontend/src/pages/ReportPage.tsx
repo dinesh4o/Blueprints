@@ -1775,7 +1775,7 @@ export default function ReportPage() {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [shareState, setShareState] = useState<'idle' | 'loading' | 'copied'>('idle');
   const [currency, setCurrency] = useState<'USD' | 'INR'>('INR');
-  const [structureMode, setStructureMode] = useState<'2d' | '3d'>('2d');
+  const [structureMode, setStructureMode] = useState<'2d' | '3d'>('3d');
   const [compareMolecule, setCompareMolecule] = useState<'A' | 'B'>('A');
   const [twinVisited, setTwinVisited] = useState(false);
   const [activeSidebar, setActiveSidebar] = useState<'ai' | 'refs' | null>(null);
@@ -1818,12 +1818,40 @@ export default function ReportPage() {
     document.addEventListener('mouseup', onMouseUp);
   }, [sidebarWidth]);
 
-  const [ragMessages, setRagMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([
-    { role: 'assistant', content: 'Hello! I am ready to answer any questions about this clinical report. Ask away!' }
-  ]);
+  // ── Persistent chat history (survives steer reruns within a session) ──
+  const STORAGE_KEY = `chat_history_${id}`;
+  const STEER_HISTORY_KEY = `steer_history_${id}`;
+  const [ragMessages, setRagMessages] = useState<{ role: 'user' | 'assistant'; content: string; suggestions?: string[] }[]>(() => {
+    try {
+      const saved = sessionStorage.getItem(STORAGE_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [{ role: 'assistant', content: 'Hello! I am ready to answer any questions about this clinical report. Ask away!' }];
+  });
+  // Steer history — ordered list of previous report versions
+  const [steerHistory, setSteerHistory] = useState<{ jobId: string; molecule: string; label: string }[]>(() => {
+    try {
+      const saved = sessionStorage.getItem(STEER_HISTORY_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
   const [ragInput, setRagInput] = useState('');
   const [ragLoading, setRagLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isVersionNavRef = useRef(false);
+
+  // Persist chat history to sessionStorage whenever it changes
+  useEffect(() => {
+    if (!id) return;
+    try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(ragMessages)); } catch {}
+  }, [ragMessages, id, STORAGE_KEY]);
+
+  // Persist steer history to sessionStorage whenever it changes
+  useEffect(() => {
+    if (!id) return;
+    try { sessionStorage.setItem(STEER_HISTORY_KEY, JSON.stringify(steerHistory)); } catch {}
+  }, [steerHistory, id, STEER_HISTORY_KEY]);
 
   // Steer mode — only changes which backend endpoint is called
   const [chatMode, setChatMode] = useState<'ask' | 'steer'>('ask');
@@ -1899,9 +1927,28 @@ export default function ReportPage() {
         }
         if (data.needsRerun && data.rerunJobId) {
           reply += '\n\n⚡ Re-analysis triggered — redirecting to progress...';
-          // Navigate to progress page after showing message briefly
           const agents = (data.rerunAgents || []).join(',');
-          setTimeout(() => navigate(`/progress/${data.rerunJobId}?steer=1${agents ? `&agents=${agents}` : ''}`), 1200);
+          const newStorageKey = `chat_history_${data.rerunJobId}`;
+          const newSteerHistoryKey = `steer_history_${data.rerunJobId}`;
+          // Build updated history: current report becomes a history entry
+          const currentMolecule = report?.molecule || 'Unknown';
+          const existingHistory = steerHistory;
+          const versionNum = existingHistory.length + 1;
+          const newEntry = { jobId: id!, molecule: currentMolecule, label: `v${versionNum} — ${currentMolecule}` };
+          const updatedHistory = [...existingHistory, newEntry];
+          setSteerHistory(updatedHistory);
+          setTimeout(() => {
+            try {
+              // Save stable self-label for current job so it can be identified correctly later
+              sessionStorage.setItem(`steer_self_label_${id}`, newEntry.label);
+              // Carry chat history to new job
+              const current = sessionStorage.getItem(STORAGE_KEY);
+              if (current) sessionStorage.setItem(newStorageKey, current);
+              // Carry steer history to new job
+              sessionStorage.setItem(newSteerHistoryKey, JSON.stringify(updatedHistory));
+            } catch {}
+            navigate(`/progress/${data.rerunJobId}?steer=1${agents ? `&agents=${agents}` : ''}`);
+          }, 1200);
         }
         if (data.activeConstraints) setActiveConstraints(data.activeConstraints);
         setRagMessages(prev => { const m = [...prev]; m[m.length - 1] = { role: 'assistant', content: reply }; return m; });
@@ -1918,7 +1965,11 @@ export default function ReportPage() {
       const res = await fetch(`/api/claude/chat/${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMessage }),
+        body: JSON.stringify({
+          message: userMessage,
+          // Pass steered version IDs so backend can merge all versions' data
+          steerVersionIds: steerHistory.map(h => h.jobId),
+        }),
       });
       if (!res.ok || !res.body) {
         setRagMessages(prev => { const m = [...prev]; m[m.length - 1] = { role: 'assistant', content: 'Error: could not connect to Claude AI.' }; return m; });
@@ -1928,6 +1979,7 @@ export default function ReportPage() {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buf = '';
+      let aiResponse = '';
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -1943,11 +1995,47 @@ export default function ReportPage() {
             if (parsed.error) {
               setRagMessages(prev => { const m = [...prev]; m[m.length - 1] = { role: 'assistant', content: `Error: ${parsed.error}` }; return m; });
             } else if (parsed.token) {
+              aiResponse += parsed.token;
               setRagMessages(prev => { const m = [...prev]; m[m.length - 1] = { role: 'assistant', content: m[m.length - 1].content + parsed.token }; return m; });
             }
           } catch { /* skip malformed SSE */ }
         }
       }
+      // Dynamic suggestions derived from what the AI actually said (not just what user asked)
+      const r = aiResponse.toLowerCase();
+      const u = userMessage.toLowerCase();
+      const namedEntities = [...aiResponse.matchAll(/\b([A-Z][a-z]{3,}(?:mab|nib|lib|vir|stat|pril|ide|ine|one)?(?:-[A-Z][a-z]+)?(?:\s[A-Z][a-z]{2,})?)/g)]
+        .map(m => m[1]).filter(n => !['This','That','The','When','What','How','Which','With','From','About','Also','Based','Such','They','Their','These','However','Therefore'].includes(n));
+      const conditionMatch = [...aiResponse.matchAll(/\b(Type \d [Dd]iabetes|[A-Z][a-z]+ [Cc]ancer|[A-Z][a-z]+emia|[A-Z][a-z]+osis|[A-Z][a-z]+itis|[A-Z][a-z]+oma|[A-Z][a-z]+ [Dd]isease|[A-Z][a-z]+ [Ss]yndrome)/g)].map(m => m[1]);
+      const firstCondition = conditionMatch[0] || '';
+      const firstEntity = namedEntities[0] || '';
+      const dynamicSuggestions: string[] =
+        r.includes('eliminat') || r.includes('deprioritiz')
+          ? [firstEntity ? `Why was ${firstEntity} eliminated?` : 'What criteria led to elimination?', 'Are there any salvageable candidates?']
+        : r.includes('adverse') || r.includes('side effect') || r.includes('toxic') || r.includes('contraindic')
+          ? [firstCondition ? `What monitoring protocols exist for ${firstCondition}?` : 'Are there any black box warnings?', 'How does this compare to the standard of care?']
+        : (r.includes('phase') || r.includes('clinical trial') || r.includes('enrolled')) && firstCondition
+          ? [`What are the Phase 3 endpoints for ${firstCondition}?`, 'What is the estimated approval timeline?']
+        : r.includes('phase') || r.includes('clinical trial') || r.includes('enrolled')
+          ? ['What are the primary trial endpoints?', 'What is the estimated approval timeline?']
+        : r.includes('fda') || r.includes('ema') || r.includes('regulatory') || r.includes('approval')
+          ? ['Is orphan drug designation applicable?', 'What is the fastest approval pathway?']
+        : (r.includes('billion') || r.includes('market size') || r.includes('revenue')) && firstCondition
+          ? [`Who are the main competitors for ${firstCondition}?`, 'What is the 5-year growth forecast?']
+        : r.includes('billion') || r.includes('market size') || r.includes('revenue')
+          ? ['Who are the main competitors in this space?', 'When is patent expiry expected?']
+        : r.includes('patent') || r.includes('exclusiv') || r.includes('generic')
+          ? ['Which IP strategy is recommended?', 'When is generic competition expected?']
+        : r.includes('mechanism') || r.includes('pathway') || r.includes('receptor') || r.includes('target')
+          ? ['Are there known resistance mechanisms?', 'What companion biomarkers are relevant?']
+        : r.includes('repurpos') || r.includes('score') || r.includes('candidat')
+          ? [firstCondition ? `What is the clinical evidence for ${firstCondition}?` : 'What drives the repurposing score?', 'Which indication has the most supporting evidence?']
+        : firstEntity
+          ? [`What is ${firstEntity}'s current development status?`, 'What are the next key milestones?']
+        : u.includes('why') || u.includes('how') || u.includes('explain')
+          ? ['Can you provide supporting references?', 'What are the key risk factors?']
+        : ['What are the next development steps?', 'How does this compare to similar drugs?'];
+      setRagMessages(prev => { const m = [...prev]; m[m.length - 1] = { ...m[m.length - 1], suggestions: dynamicSuggestions }; return m; });
     } catch {
       setRagMessages(prev => { const m = [...prev]; m[m.length - 1] = { role: 'assistant', content: 'Network error — could not reach Claude AI.' }; return m; });
     }
@@ -2308,6 +2396,59 @@ export default function ReportPage() {
                 </Button>
               </div>
 
+              {/* ── Steer History ── */}
+              {steerHistory.length > 0 && (
+                <div className="px-4 py-2 border-b border-zinc-800/40 bg-zinc-950/50">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <Clock size={10} className="text-zinc-600" />
+                    <span className="text-[10px] font-medium text-zinc-600 uppercase tracking-wider">Previous Steered Versions</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {steerHistory.map((entry, i) => (
+                      <button
+                        key={entry.jobId}
+                        onClick={() => {
+                          if (isVersionNavRef.current) return;
+                          isVersionNavRef.current = true;
+                          try {
+                            // Copy current chat to target
+                            const targetChatKey = `chat_history_${entry.jobId}`;
+                            const targetHistoryKey = `steer_history_${entry.jobId}`;
+                            const currentChat = sessionStorage.getItem(STORAGE_KEY);
+                            if (currentChat) sessionStorage.setItem(targetChatKey, currentChat);
+
+                            // Stable self-label for the current job
+                            const selfLabel =
+                              sessionStorage.getItem(`steer_self_label_${id}`) ||
+                              `v${steerHistory.length + 1} — ${report?.molecule || 'Unknown'}`;
+                            const currentEntry = { jobId: id!, molecule: report?.molecule || 'Unknown', label: selfLabel };
+
+                            // Merge: existing target history + our full chain + current job, dedup by jobId, exclude target itself
+                            const existingTarget: { jobId: string; molecule: string; label: string }[] = (() => {
+                              try { const s = sessionStorage.getItem(targetHistoryKey); return s ? JSON.parse(s) : []; } catch { return []; }
+                            })();
+                            const merged = [...existingTarget, ...steerHistory, currentEntry];
+                            const seen = new Set<string>();
+                            const historyForTarget = merged.filter(h => {
+                              if (h.jobId === entry.jobId) return false;
+                              if (seen.has(h.jobId)) return false;
+                              seen.add(h.jobId);
+                              return true;
+                            });
+                            sessionStorage.setItem(targetHistoryKey, JSON.stringify(historyForTarget));
+                          } catch {}
+                          navigate(`/report/${entry.jobId}`);
+                        }}
+                        className="text-[11px] px-2.5 py-1 rounded-full bg-violet-500/10 border border-violet-500/25 text-violet-400 hover:bg-violet-500/20 hover:border-violet-500/50 hover:text-violet-300 transition-colors"
+                        title={`Open ${entry.label} with current chat`}
+                      >
+                        {entry.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* ── Active Constraints Banner ── */}
               {activeConstraints.length > 0 && (
                 <div className="px-4 py-2 border-b border-zinc-800/40 bg-zinc-950/50 flex flex-wrap gap-1.5">
@@ -2354,19 +2495,31 @@ export default function ReportPage() {
                           msg.role === 'user' ? "bg-zinc-700 text-white border-zinc-600" : "bg-[#18181b] text-zinc-400 border-[#27272a]")}>
                           {msg.role === 'user' ? <User size={14} /> : <Sparkles size={14} />}
                         </div>
-                        <div className={clsx("px-4 py-2 rounded-2xl max-w-[80%] text-sm leading-relaxed whitespace-pre-wrap",
-                          msg.role === 'user' ? "bg-zinc-800 text-zinc-100" : "bg-[#18181b] border border-[#27272a] text-zinc-300 [&>p]:mb-2 [&>ul]:list-disc [&>ul]:pl-5 [&>ol]:list-decimal [&>ol]:pl-5 [&>h1]:text-xl [&>h1]:font-bold [&>h2]:text-lg [&>h2]:font-bold [&>h3]:text-base [&>h3]:font-bold [&>p:last-child]:mb-0 [&>strong]:text-zinc-200")}>
-                          {msg.role === 'user' ? (
-                            msg.content
-                          ) : (
-                            <ReactMarkdown>{msg.content}</ReactMarkdown>
-                          )}
-                          {msg.role === 'assistant' && msg.content === '' && ragLoading && (
-                            <span className="inline-flex items-center gap-1 ml-1">
-                              <span className="w-1 h-1 rounded-full bg-zinc-500 animate-bounce"></span>
-                              <span className="w-1 h-1 rounded-full bg-zinc-500 animate-bounce" style={{ animationDelay: '0.15s' }}></span>
-                              <span className="w-1 h-1 rounded-full bg-zinc-500 animate-bounce" style={{ animationDelay: '0.3s' }}></span>
-                            </span>
+                        <div className="flex flex-col gap-1.5 max-w-[80%]">
+                          <div className={clsx("px-4 py-2 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap",
+                            msg.role === 'user' ? "bg-zinc-800 text-zinc-100" : "bg-[#18181b] border border-[#27272a] text-zinc-300 [&>p]:mb-2 [&>ul]:list-disc [&>ul]:pl-5 [&>ol]:list-decimal [&>ol]:pl-5 [&>h1]:text-xl [&>h1]:font-bold [&>h2]:text-lg [&>h2]:font-bold [&>h3]:text-base [&>h3]:font-bold [&>p:last-child]:mb-0 [&>strong]:text-zinc-200")}>
+                            {msg.role === 'user' ? (
+                              msg.content
+                            ) : (
+                              <ReactMarkdown>{msg.content}</ReactMarkdown>
+                            )}
+                            {msg.role === 'assistant' && msg.content === '' && ragLoading && (
+                              <span className="inline-flex items-center gap-1 ml-1">
+                                <span className="w-1 h-1 rounded-full bg-zinc-500 animate-bounce"></span>
+                                <span className="w-1 h-1 rounded-full bg-zinc-500 animate-bounce" style={{ animationDelay: '0.15s' }}></span>
+                                <span className="w-1 h-1 rounded-full bg-zinc-500 animate-bounce" style={{ animationDelay: '0.3s' }}></span>
+                              </span>
+                            )}
+                          </div>
+                          {msg.role === 'assistant' && msg.suggestions && msg.suggestions.length > 0 && !ragLoading && (
+                            <div className="flex flex-wrap gap-1.5 mt-0.5">
+                              {msg.suggestions.map((s, si) => (
+                                <button key={si} onClick={(e) => handleRagSubmit(e as any, s)} disabled={ragLoading}
+                                  className="text-xs text-zinc-400 border border-zinc-700/60 hover:border-zinc-500 hover:text-zinc-200 rounded-full px-3 py-1 transition-colors bg-zinc-900/60 disabled:opacity-40">
+                                  {s}
+                                </button>
+                              ))}
+                            </div>
                           )}
                         </div>
                       </div>

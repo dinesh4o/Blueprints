@@ -12,6 +12,7 @@ export interface IUser extends Document {
   plan: 'free' | 'researcher' | 'organization';
   planPaidAt?: Date;
   isActive: boolean;
+  bannedUntil?: Date;
   lastLogin?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -66,6 +67,9 @@ const userSchema = new Schema<IUser>(
     isActive: {
       type: Boolean,
       default: true,
+    },
+    bannedUntil: {
+      type: Date,
     },
     lastLogin: {
       type: Date,

@@ -65,6 +65,18 @@ passport.serializeUser((user: any, done) => {
 passport.deserializeUser(async (id: string, done) => {
   try {
     const user = await User.findById(id);
+    if (user) {
+      // Auto-lift expired temporary bans
+      if (!user.isActive && user.bannedUntil && new Date() > user.bannedUntil) {
+        user.isActive = true;
+        user.bannedUntil = undefined;
+        await user.save();
+      }
+      // Block permanently banned users (no bannedUntil means permanent)
+      if (!user.isActive && !user.bannedUntil) {
+        return done(null, false as any);
+      }
+    }
     done(null, user);
   } catch (error) {
     done(error, null);

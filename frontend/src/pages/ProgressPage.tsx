@@ -362,42 +362,11 @@ export default function ProgressPage() {
         }
       `}</style>
 
-      {/* Prompt resolution banner */}
-      {job?.resolvedFrom && job?.prompt && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 max-w-lg w-full px-4">
-          <div className="bg-violet-500/10 border border-violet-500/30 rounded-xl px-5 py-3 backdrop-blur-md">
-            <div className="flex items-center gap-2 text-xs text-violet-300 mb-1">
-              <Sparkles size={12} className="text-violet-400" />
-              <span className="font-medium">AI Query Resolution</span>
-            </div>
-            <p className="text-sm text-zinc-300">
-              <span className="text-zinc-500">"{job.prompt}"</span>
-              <span className="text-zinc-600 mx-1.5">→</span>
-              <span className="text-white font-semibold">{job.molecule}</span>
-            </p>
-            {job.resolvedFrom && (
-              <p className="text-xs text-zinc-500 mt-1">{job.resolvedFrom}</p>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <header className="absolute top-0 w-full px-8 py-6 flex justify-between items-center z-50">
         <div className="flex flex-col">
-          <div className="text-zinc-100 font-semibold text-sm tracking-tight">Agent Pipeline</div>
+          <div className="text-zinc-100 font-semibold text-sm tracking-tight">{job?.molecule || 'Agent Pipeline'}</div>
           <div className="text-zinc-500 text-xs mt-0.5 flex items-center gap-3">
-            {job?.resolvedFrom ? (
-              <span className="flex items-center gap-1.5">
-                <span className="text-violet-400">AI resolved</span>
-                <span className="text-zinc-600">→</span>
-                <span className="text-zinc-200 font-medium">{job.molecule}</span>
-              </span>
-            ) : job?.molecule ? (
-              `Analyzing ${job.molecule}`
-            ) : (
-              'Multi-Agent Orchestration'
-            )}
             <button 
               onClick={() => setUseColor(!useColor)} 
               className={`px-2 py-0.5 rounded border text-[11px] transition-colors ${useColor ? 'border-zinc-600 text-zinc-300' : 'border-zinc-800 text-zinc-600'}`}

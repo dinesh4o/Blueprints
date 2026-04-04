@@ -20,6 +20,8 @@ const ProfilePage = lazy(() => import('./pages/ProfilePage').then(m => ({ defaul
 const PricingPage = lazy(() => import('./pages/PricingPage').then(m => ({ default: m.PricingPage })));
 const SharedReportPage = lazy(() => import('./pages/SharedReportPage'));
 const PresentationDeckPage = lazy(() => import('./pages/PresentationDeckPage').then(m => ({ default: m.Presentation })));
+const AdminPage = lazy(() => import('./pages/AdminPage'));
+const RAGChatPage = lazy(() => import('./pages/RAGChatPage'));
 
 // A simple fallback for Suspense
 const PageLoader = () => (
@@ -123,6 +125,22 @@ export default function App() {
                     element={
                       <ProtectedRoute>
                         <CommunityPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin"
+                    element={
+                      <ProtectedRoute>
+                        <AdminPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/rag"
+                    element={
+                      <ProtectedRoute>
+                        <RAGChatPage />
                       </ProtectedRoute>
                     }
                   />

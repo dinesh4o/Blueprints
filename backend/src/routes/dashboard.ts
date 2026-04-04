@@ -55,7 +55,7 @@ router.get('/user-stats', requireAuth, async (req: Request, res: Response) => {
     // Shared reports
     const sharedCount = completed.filter(j => j.shareToken).length;
 
-    // Top repurposing candidates across all reports
+    // Top repurposing candidates across all reports — deduplicated by condition+molecule
     const allCandidates: any[] = [];
     for (const j of completed) {
       const cands = j.reportData?.repurposing_candidates || [];
@@ -63,7 +63,15 @@ router.get('/user-stats', requireAuth, async (req: Request, res: Response) => {
         allCandidates.push({ ...c, molecule: j.molecule });
       }
     }
-    const topCandidates = allCandidates
+    // Keep the highest-scoring entry per unique condition+molecule pair
+    const seen = new Map<string, any>();
+    for (const c of allCandidates) {
+      const key = `${(c.condition || '').toLowerCase()}||${(c.molecule || '').toLowerCase()}`;
+      if (!seen.has(key) || (c.repurposing_score ?? 0) > (seen.get(key).repurposing_score ?? 0)) {
+        seen.set(key, c);
+      }
+    }
+    const topCandidates = Array.from(seen.values())
       .sort((a, b) => (b.repurposing_score ?? 0) - (a.repurposing_score ?? 0))
       .slice(0, 5);
 

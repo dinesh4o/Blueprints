@@ -87,20 +87,30 @@ export default function AnimatedMolecule3D({ cid, height = 260 }: Props) {
 
       {status === 'error' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10">
-          <p className="text-xs text-muted-foreground text-center px-4">
-            No 3D conformer available in PubChem for this compound.
-          </p>
+          {cid ? (
+            <img
+              src={`https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/PNG?image_size=300x300`}
+              alt="2D Structure"
+              className="max-h-[70%] object-contain rounded-lg opacity-90"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+          ) : (
+            <p className="text-xs text-muted-foreground text-center px-4">
+              No 3D conformer available in PubChem for this compound.
+            </p>
+          )}
           <Button size="sm" variant="outline" onClick={initViewer} className="gap-1 text-xs h-7">
-            <RotateCcw size={11} /> Retry
+            <RotateCcw size={11} /> Retry 3D
           </Button>
         </div>
       )}
 
       <div
         ref={viewerRef}
-        className="w-full h-full"
+        className="absolute inset-0"
         style={{
-          visibility: status === 'ready' ? 'visible' : 'hidden',
+          opacity: status === 'ready' ? 1 : 0,
+          pointerEvents: status === 'ready' ? 'auto' : 'none',
         }}
       />
 
