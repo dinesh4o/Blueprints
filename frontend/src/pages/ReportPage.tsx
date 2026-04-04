@@ -1865,7 +1865,8 @@ export default function ReportPage() {
   };
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = messagesEndRef.current;
+    if (el) el.scrollIntoView({ behavior: 'instant', block: 'end' });
   }, [ragMessages, activeSidebar]);
 
   const handleRagSubmit = async (e: React.FormEvent, quickMsg?: string) => {

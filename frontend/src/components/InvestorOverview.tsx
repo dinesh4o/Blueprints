@@ -45,8 +45,8 @@ export default function InvestorOverview({ report, formatMarketSize }: InvestorO
     .slice(0, 4);
 
   const marketAnalysis = report.market_analysis || [];
-  const topOpps = report.top_opportunities || [];
-  const topRisks = report.top_risks || [];
+  const topOpps = report.ai_analysis?.top_opportunities || report.top_opportunities || [];
+  const topRisks = report.ai_analysis?.top_risks || report.top_risks || [];
   const patents = report.patent_data || [];
   const trials = report.clinical_data || [];
 
