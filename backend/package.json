@@ -35,7 +35,9 @@
     "clsx": "^2.1.1",
     "connect-mongo": "^6.0.0",
     "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
     "d3": "^7.9.0",
+    "dotenv": "^16.4.5",
     "express": "^4.22.1",
     "express-session": "^1.19.0",
     "framer-motion": "^12.36.0",
@@ -60,8 +62,6 @@
     "@types/passport": "^1.0.17",
     "@types/passport-google-oauth20": "^2.0.17",
     "autoprefixer": "^10.4.21",
-    "cors": "^2.8.6",
-    "dotenv": "^16.4.5",
     "tailwindcss": "^4.1.14",
     "typescript": "~5.8.2"
   }

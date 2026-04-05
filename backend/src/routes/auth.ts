@@ -1,16 +1,49 @@
 import { Router, Request, Response } from 'express';
 import passport from 'passport';
 import crypto from 'crypto';
-import Razorpay from 'razorpay';
 import { User } from '../models/User';
 import { Job } from '../models/Job';
 
 const router = Router();
 
-const razorpayInstance = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID || '',
-  key_secret: process.env.RAZORPAY_KEY_SECRET || '',
-});
+type RazorpayOrderClient = {
+  orders: {
+    create: (payload: {
+      amount: number;
+      currency: string;
+      receipt: string;
+      notes: { plan: string; userId: string };
+    }) => Promise<any>;
+  };
+};
+
+let razorpayClientPromise: Promise<RazorpayOrderClient> | null = null;
+
+async function getRazorpayClient(): Promise<RazorpayOrderClient> {
+  const keyId = process.env.RAZORPAY_KEY_ID;
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+
+  if (!keyId || !keySecret) {
+    throw new Error('Razorpay credentials are not configured');
+  }
+
+  if (!razorpayClientPromise) {
+    razorpayClientPromise = import('razorpay')
+      .then(({ default: Razorpay }) => {
+        const instance = new Razorpay({
+          key_id: keyId,
+          key_secret: keySecret,
+        });
+        return instance as unknown as RazorpayOrderClient;
+      })
+      .catch((error) => {
+        razorpayClientPromise = null;
+        throw error;
+      });
+  }
+
+  return razorpayClientPromise;
+}
 
 // @route   POST /api/auth/signup
 // @desc    Register new user
@@ -348,7 +381,9 @@ router.post('/create-order', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: 'Invalid plan' });
     }
 
-    const order = await razorpayInstance.orders.create({
+    const razorpayClient = await getRazorpayClient();
+
+    const order = await razorpayClient.orders.create({
       amount,
       currency: 'INR',
       receipt: `plan_${plan}_${Date.now()}`,
@@ -358,6 +393,21 @@ router.post('/create-order', async (req: Request, res: Response) => {
     res.json({ success: true, order });
   } catch (error: any) {
     console.error('Razorpay order creation error:', error);
+
+    if (error?.code === 'ERR_MODULE_NOT_FOUND') {
+      return res.status(503).json({
+        success: false,
+        message: 'Payments service is temporarily unavailable. Please try again shortly.',
+      });
+    }
+
+    if (typeof error?.message === 'string' && error.message.includes('Razorpay credentials are not configured')) {
+      return res.status(500).json({
+        success: false,
+        message: 'Payments are not configured on the server.',
+      });
+    }
+
     res.status(500).json({ success: false, message: 'Failed to create order' });
   }
 });
