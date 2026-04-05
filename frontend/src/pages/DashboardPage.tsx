@@ -683,6 +683,7 @@ export default function DashboardPage() {
             {[
               { label: 'New Analysis', icon: Search,       path: '/search'        },
               { label: 'Portfolio',    icon: FileText,     path: '/portfolio'      },
+              { label: 'Research Hub', icon: FlaskConical, path: '/research-hub'  },
               { label: 'Research RAG', icon: BookOpen,     path: '/rag'            },
               { label: 'Community',   icon: MessageSquare, path: '/community'     },
               { label: 'Pricing',     icon: Crown,        path: '/pricing'        },

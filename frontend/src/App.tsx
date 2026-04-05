@@ -22,6 +22,8 @@ const SharedReportPage = lazy(() => import('./pages/SharedReportPage'));
 const PresentationDeckPage = lazy(() => import('./pages/PresentationDeckPage').then(m => ({ default: m.Presentation })));
 const AdminPage = lazy(() => import('./pages/AdminPage'));
 const RAGChatPage = lazy(() => import('./pages/RAGChatPage'));
+const ResearchHubPage = lazy(() => import('./pages/ResearchHubPage'));
+const ProjectPage = lazy(() => import('./pages/ProjectPage'));
 
 // A simple fallback for Suspense
 const PageLoader = () => (
@@ -143,6 +145,15 @@ export default function App() {
                         <RAGChatPage />
                       </ProtectedRoute>
                     }
+                  />
+                  {/* Research Hub — public browse, auth required for create/contribute */}
+                  <Route path="/research-hub" element={<ResearchHubPage />} />
+                  <Route path="/research-hub/my" element={
+                    <ProtectedRoute><ResearchHubPage /></ProtectedRoute>
+                  } />
+                  <Route
+                    path="/project/:id"
+                    element={<ProjectPage />}
                   />
 
                 </Routes>
