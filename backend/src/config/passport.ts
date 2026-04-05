@@ -2,12 +2,13 @@ import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { User, IUser } from '../models/User';
 
-// Google OAuth Strategy
+// Google OAuth Strategy — only register if credentials are available
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 passport.use(
   new GoogleStrategy(
     {
-      clientID: process.env.GOOGLE_CLIENT_ID || '',
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+      clientID: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
       callbackURL: process.env.NODE_ENV === 'development'
         ? `http://localhost:${process.env.PORT || 3000}/api/auth/google/callback`
         : `${(process.env.CLIENT_URL || 'https://luvara.vercel.app').replace(/\/$/, '')}/api/auth/google/callback`,
@@ -55,6 +56,9 @@ passport.use(
     }
   )
 );
+} else {
+  console.warn('[Auth] GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET not set — Google OAuth disabled.');
+}
 
 // Serialize user for session
 passport.serializeUser((user: any, done) => {

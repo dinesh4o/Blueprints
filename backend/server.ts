@@ -2358,6 +2358,9 @@ AI Viability Score: ${resultState.viabilityScore}/10`;
   });
 }
 
-startServer();
+startServer().catch(err => {
+  console.error('Fatal: Server failed to start:', err);
+  process.exit(1);
+});
 
 

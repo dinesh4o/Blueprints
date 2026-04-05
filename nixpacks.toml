@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ["nodejs", "npm", "python311"]
+
+[phases.install]
+cmds = [
+    "npm install --legacy-peer-deps",
+    "pip install -r requirements.txt"
+]
+
+[start]
+cmd = "npx tsx backend/server.ts"
