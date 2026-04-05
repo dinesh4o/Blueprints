@@ -2,6 +2,26 @@ import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { User, IUser } from '../models/User';
 
+function stripTrailingSlash(url: string): string {
+  return url.replace(/\/+$/, '');
+}
+
+function getGoogleCallbackUrl(): string {
+  if (process.env.GOOGLE_CALLBACK_URL) {
+    return stripTrailingSlash(process.env.GOOGLE_CALLBACK_URL);
+  }
+
+  const defaultClientUrl = stripTrailingSlash(process.env.CLIENT_URL || 'https://luvara.vercel.app');
+  const backendBaseUrl = stripTrailingSlash(
+    process.env.BACKEND_URL ||
+    process.env.API_BASE_URL ||
+    process.env.SERVER_URL ||
+    defaultClientUrl
+  );
+
+  return `${backendBaseUrl}/api/auth/google/callback`;
+}
+
 // Google OAuth Strategy — only register if credentials are available
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 passport.use(
@@ -9,9 +29,7 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: process.env.NODE_ENV === 'development'
-        ? `http://localhost:${process.env.PORT || 3000}/api/auth/google/callback`
-        : `${(process.env.CLIENT_URL || 'https://luvara.vercel.app').replace(/\/$/, '')}/api/auth/google/callback`,
+      callbackURL: getGoogleCallbackUrl(),
       proxy: true,
     },
     async (accessToken, refreshToken, profile, done) => {
