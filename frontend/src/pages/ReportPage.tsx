@@ -1774,7 +1774,36 @@ export default function ReportPage() {
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [shareState, setShareState] = useState<'idle' | 'loading' | 'copied'>('idle');
+  const [showAddToProject, setShowAddToProject] = useState(false);
+  const [myProjects, setMyProjects] = useState<{ _id: string; title: string }[]>([]);
+  const [addToProjectState, setAddToProjectState] = useState<'idle' | 'loading' | 'done'>('idle');
 
+  const loadMyProjects = async () => {
+    try {
+      const res = await fetch('/api/projects/my', { credentials: 'include' });
+      const data = await res.json();
+      setMyProjects((data.projects || []).map((p: any) => ({ _id: p._id, title: p.title })));
+    } catch { setMyProjects([]); }
+  };
+
+  const addCurrentReportToProject = async (projectId: string) => {
+    if (!id || addToProjectState !== 'idle') return;
+    setAddToProjectState('loading');
+    try {
+      const res = await fetch(`/api/projects/${projectId}/analyses`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ jobId: id, title: report?.molecule }),
+      });
+      if (res.ok) {
+        setAddToProjectState('done');
+        setTimeout(() => { setAddToProjectState('idle'); setShowAddToProject(false); }, 1800);
+      } else {
+        setAddToProjectState('idle');
+      }
+    } catch { setAddToProjectState('idle'); }
+  };
   const [currency, setCurrency] = useState<'USD' | 'INR'>('INR');
   const [structureMode, setStructureMode] = useState<'2d' | '3d'>('3d');
   const [compareMolecule, setCompareMolecule] = useState<'A' | 'B'>('A');
@@ -2228,6 +2257,42 @@ export default function ReportPage() {
                     : <Share2 size={16} />}
                 </button>
 
+                {/* Add to Project */}
+                <div className="relative">
+                  <button
+                    onClick={() => { setShowAddToProject(s => !s); if (!showAddToProject) loadMyProjects(); }}
+                    title="Add to Research Project"
+                    className="p-1.5 rounded-lg transition-colors text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/60"
+                  >
+                    <FlaskConical size={16} />
+                  </button>
+                  {showAddToProject && (
+                    <div className="absolute right-0 top-full mt-1 bg-zinc-900 border border-zinc-800 rounded-xl py-1.5 min-w-[220px] shadow-xl z-30">
+                      <p className="text-[10px] text-zinc-600 px-3 py-1 uppercase tracking-wide font-medium">Add to Project</p>
+                      {myProjects.length === 0 && (
+                        <p className="text-xs text-zinc-600 px-3 py-2 italic">No projects yet.</p>
+                      )}
+                      {myProjects.map(p => (
+                        <button
+                          key={p._id}
+                          onClick={() => addCurrentReportToProject(p._id)}
+                          disabled={addToProjectState !== 'idle'}
+                          className="w-full text-left px-3 py-2 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 transition-colors"
+                        >
+                          {addToProjectState === 'done' ? '\u2713 Added!' : p.title}
+                        </button>
+                      ))}
+                      <div className="border-t border-zinc-800 mt-1 pt-1">
+                        <button
+                          onClick={() => { setShowAddToProject(false); window.location.href = '/research-hub'; }}
+                          className="w-full text-left px-3 py-2 text-xs text-cyan-400 hover:text-cyan-300 hover:bg-zinc-800/60 transition-colors"
+                        >
+                          + New Project
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
               </div>
               <div className="flex items-center gap-2 mt-1 text-xs font-medium text-zinc-500">
