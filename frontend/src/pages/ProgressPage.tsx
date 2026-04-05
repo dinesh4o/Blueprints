@@ -39,19 +39,21 @@ const BotIcon = ({
   </div>
 );
 
-// Maps server step names → UI step indices (0-7)
+// Maps server step names → UI step indices (0-8)
 const SERVER_TO_UI: Record<string, number> = {
-  ClinicalAgent:  0,
-  PatentAgent:    1,
-  LiteratureAgent:2,
-  RegulatoryAgent:3,
-  TargetAgent:    4,
-  PubChemAgent:   5,
-  AnalogAgent:    6,
-  SynthesisAgent: 7,
+  PlannerAgent:   0,
+  ClinicalAgent:  1,
+  PatentAgent:    2,
+  LiteratureAgent:3,
+  RegulatoryAgent:4,
+  TargetAgent:    5,
+  PubChemAgent:   6,
+  AnalogAgent:    7,
+  SynthesisAgent: 8,
 };
 
 const UI_STEPS = [
+  { query: 'Planning',                 serverName: 'PlannerAgent',    log: 'Executing planResearch: Generating dynamic research plan via LLM...', fetchingText: 'Planning research strategy...', color: '#a78bfa' },
   { query: 'Clinical',                 serverName: 'ClinicalAgent',   log: 'Executing fetchClinicalData: Retrieving historical clinical trial data and adverse events...', fetchingText: 'Fetching ClinicalTrials.gov...', color: '#60a5fa' },
   { query: 'Patent',                   serverName: 'PatentAgent',     log: 'Executing fetchPatentData: Scanning intellectual property and exclusivity timelines...', fetchingText: 'Searching USPTO...', color: '#c084fc' },
   { query: 'Literature',               serverName: 'LiteratureAgent', log: 'Executing fetchLiteratureData: Extracting mechanistic pathways from PubMed corpus...', fetchingText: 'Searching PubMed...', color: '#fcd34d' },
@@ -67,6 +69,8 @@ export default function ProgressPage() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const compareId = searchParams.get('compare');
+  const isSteerRerun = searchParams.get('steer') === '1';
+  const steerAgentsParam = searchParams.get('agents') || '';
   const navigate = useNavigate();
   const [job, setJob] = useState<any>(null);
   const [compareJob, setCompareJob] = useState<any>(null);
@@ -77,13 +81,30 @@ export default function ProgressPage() {
   const [debateData, setDebateData] = useState<{ advocate: string[], skeptic: string[] } | null>(null);
   const [useColor, setUseColor] = useState(true);
 
-  const isDataPhase  = activeStepIndex < 8;
-  const isDebatePhase = activeStepIndex === 8;
-  const progressPercent = Math.round(((activeStepIndex + 1) / UI_STEPS.length) * 100);
+  // For steer re-runs, show only the re-running agents + debate
+  const visibleSteps = (() => {
+    if (!isSteerRerun) return UI_STEPS;
+    const agentNames = new Set(steerAgentsParam.split(',').filter(Boolean));
+    // Always include PlannerAgent and SynthesisAgent
+    agentNames.add('PlannerAgent');
+    agentNames.add('SynthesisAgent');
+    const dataSteps = UI_STEPS.filter(s => s.serverName && agentNames.has(s.serverName));
+    const debateStep = UI_STEPS[UI_STEPS.length - 1]; // Advocate & Skeptic
+    return [...dataSteps, debateStep];
+  })();
+
+  // Build a mapping from filtered step indices → server step names
+  const filteredServerToUi: Record<string, number> = {};
+  visibleSteps.forEach((s, i) => { if (s.serverName) filteredServerToUi[s.serverName] = i; });
+
+  const debateIndex = visibleSteps.length - 1;
+  const isDataPhase  = activeStepIndex < debateIndex;
+  const isDebatePhase = activeStepIndex === debateIndex;
+  const progressPercent = Math.round(((activeStepIndex + 1) / visibleSteps.length) * 100);
 
   // Derive a log from real server data if available
   const getLog = (uiIdx: number) => {
-    const step = UI_STEPS[uiIdx];
+    const step = visibleSteps[uiIdx];
     if (step.serverName && job?.steps) {
       const srv = job.steps.find((s: any) => s.name === step.serverName);
       if (srv?.log && srv.log !== 'Pending...' && srv.log !== 'Initializing...') return srv.log;
@@ -92,18 +113,21 @@ export default function ProgressPage() {
   };
 
   const getDynamicLog = (index: number, mol: string) => {
-    switch (index) {
-      case 0: return `Aggregating safety data and historical baseline metrics from Phase 2/3 trial cohorts for ${mol}...`;
-      case 1: return `Parsing USPTO databases: Extracted 3 pending exclusionary timelines and structural claims linked to ${mol}...`;
-      case 2: return `Deep-scanning PubMed corpus: Analyzed 84 recent indexed papers to determine mechanistic pathways for ${mol}...`;
-      case 3: return `Cross-referencing FDA registries and EMA approval trajectories: Evaluating orphan drug status for ${mol}...`;
-      case 4: return `Identifying primary protein targets. ChEMBL indicates high binding affinity profiles for ${mol}...`;
-      case 5: return `Retrieving physicochemical properties: Molecular weight 314.5g/mol, LogP 2.4, high oral bioavailability for ${mol}...`;
-      case 6: return `Generating similarities from Zinc15: Discovered 12 analogous compounds with >0.85 Tanimoto scores...`;
-      case 7: return `Synthesizing accumulated multi-agent unstructured data into comprehensive relationship knowledge graphs...`;
-      case 8: return `Debate Node: Advocate highlights efficacy metrics while Skeptic flags mitochondrial toxicity risks.`;
-      default: return getLog(index);
-    }
+    const step = visibleSteps[index];
+    const dynamicLogs: Record<string, string> = {
+      PlannerAgent:    `Generating dynamic research plan: Identifying optimal agent priorities and focus areas for ${mol}...`,
+      ClinicalAgent:   `Aggregating safety data and historical baseline metrics from Phase 2/3 trial cohorts for ${mol}...`,
+      PatentAgent:     `Parsing USPTO databases: Extracted 3 pending exclusionary timelines and structural claims linked to ${mol}...`,
+      LiteratureAgent: `Deep-scanning PubMed corpus: Analyzed 84 recent indexed papers to determine mechanistic pathways for ${mol}...`,
+      RegulatoryAgent: `Cross-referencing FDA registries and EMA approval trajectories: Evaluating orphan drug status for ${mol}...`,
+      TargetAgent:     `Identifying primary protein targets. ChEMBL indicates high binding affinity profiles for ${mol}...`,
+      PubChemAgent:    `Retrieving physicochemical properties: Molecular weight 314.5g/mol, LogP 2.4, high oral bioavailability for ${mol}...`,
+      AnalogAgent:     `Generating similarities from Zinc15: Discovered 12 analogous compounds with >0.85 Tanimoto scores...`,
+      SynthesisAgent:  `Synthesizing accumulated multi-agent unstructured data into comprehensive relationship knowledge graphs...`,
+    };
+    if (step?.serverName && dynamicLogs[step.serverName]) return dynamicLogs[step.serverName];
+    if (!step?.serverName) return `Debate Node: Advocate highlights efficacy metrics while Skeptic flags mitochondrial toxicity risks.`;
+    return getLog(index);
   };
 
   // ── API Polling ────────────────────────────────────────────────────────────
@@ -135,8 +159,8 @@ export default function ProgressPage() {
             s.status === 'running' || s.status === 'done' ? i : best, -1);
           if (runningIdx >= 0) {
             const serverName = data.steps[runningIdx]?.name;
-            const mappedUi = SERVER_TO_UI[serverName] ?? runningIdx;
-            setTargetStepIndex(prev => Math.min(Math.max(prev, mappedUi), 7));
+            const mappedUi = filteredServerToUi[serverName] ?? runningIdx;
+            setTargetStepIndex(prev => Math.min(Math.max(prev, mappedUi), debateIndex - 1));
           }
         }
 
@@ -145,14 +169,14 @@ export default function ProgressPage() {
 
         if (data.status === 'complete' && compareReady) {
           clearInterval(interval);
-          setTargetStepIndex(8);
+          setTargetStepIndex(debateIndex);
         } else if (data.status === 'complete' && !compareReady) {
           // Primary done but compare still running — keep polling
         } else if (data.status === 'error') {
           clearInterval(interval);
           setError('Pipeline failed to complete.');
         } else if (data.status === 'awaiting_ai' && compareReady) {
-          setTargetStepIndex(8);
+          setTargetStepIndex(debateIndex);
           clearInterval(interval); // Stop polling, AI phase will take over
         }
       } catch (err) {
@@ -168,7 +192,7 @@ export default function ProgressPage() {
   // ── Gemini AI Trigger ──────────────────────────────────────────────────────
   useEffect(() => {
     const runAiAnalysis = async () => {
-      if (activeStepIndex !== 8 || job?.status !== 'awaiting_ai' || isProcessingAi) return;
+      if (activeStepIndex !== debateIndex || job?.status !== 'awaiting_ai' || isProcessingAi) return;
       setIsProcessingAi(true);
       
       try {
@@ -251,7 +275,7 @@ export default function ProgressPage() {
 
   // ── Native Complete Navigation ─────────────────────────────────────────────
   useEffect(() => {
-    if (activeStepIndex === 8 && job?.status === 'complete') {
+    if (activeStepIndex === debateIndex && job?.status === 'complete') {
       let isSubscribed = true;
 
       // Extract real LLM arguments from the generated report if available
@@ -314,7 +338,7 @@ export default function ProgressPage() {
     );
   }
 
-  const currentStep = UI_STEPS[activeStepIndex];
+  const currentStep = visibleSteps[activeStepIndex];
 
   return (
     <div className="min-h-screen bg-[#000000] text-zinc-200 font-sans flex flex-col items-center justify-center relative overflow-hidden">
@@ -338,42 +362,11 @@ export default function ProgressPage() {
         }
       `}</style>
 
-      {/* Prompt resolution banner */}
-      {job?.resolvedFrom && job?.prompt && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 max-w-lg w-full px-4">
-          <div className="bg-violet-500/10 border border-violet-500/30 rounded-xl px-5 py-3 backdrop-blur-md">
-            <div className="flex items-center gap-2 text-xs text-violet-300 mb-1">
-              <Sparkles size={12} className="text-violet-400" />
-              <span className="font-medium">AI Query Resolution</span>
-            </div>
-            <p className="text-sm text-zinc-300">
-              <span className="text-zinc-500">"{job.prompt}"</span>
-              <span className="text-zinc-600 mx-1.5">→</span>
-              <span className="text-white font-semibold">{job.molecule}</span>
-            </p>
-            {job.resolvedFrom && (
-              <p className="text-xs text-zinc-500 mt-1">{job.resolvedFrom}</p>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <header className="absolute top-0 w-full px-8 py-6 flex justify-between items-center z-50">
         <div className="flex flex-col">
-          <div className="text-zinc-100 font-semibold text-sm tracking-tight">Agent Pipeline</div>
+          <div className="text-zinc-100 font-semibold text-sm tracking-tight">{job?.molecule || 'Agent Pipeline'}</div>
           <div className="text-zinc-500 text-xs mt-0.5 flex items-center gap-3">
-            {job?.resolvedFrom ? (
-              <span className="flex items-center gap-1.5">
-                <span className="text-violet-400">AI resolved</span>
-                <span className="text-zinc-600">→</span>
-                <span className="text-zinc-200 font-medium">{job.molecule}</span>
-              </span>
-            ) : job?.molecule ? (
-              `Analyzing ${job.molecule}`
-            ) : (
-              'Multi-Agent Orchestration'
-            )}
             <button 
               onClick={() => setUseColor(!useColor)} 
               className={`px-2 py-0.5 rounded border text-[11px] transition-colors ${useColor ? 'border-zinc-600 text-zinc-300' : 'border-zinc-800 text-zinc-600'}`}
@@ -423,7 +416,7 @@ export default function ProgressPage() {
           </g>
         </svg>
 
-        {/* ── Data Phase (steps 0-7) ── */}
+        {/* ── Data Phase (steps 0-8) ── */}
         <div className={`absolute inset-0 flex items-center justify-center transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${isDataPhase ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}`}>
 
           {/* Supervisor bot at top */}
@@ -435,7 +428,7 @@ export default function ProgressPage() {
           </div>
 
           {/* Carousel of data agents */}
-          {UI_STEPS.slice(0, 8).map((step, i) => {
+          {visibleSteps.slice(0, debateIndex).map((step, i) => {
             const offset  = i - activeStepIndex;
             const isCurrent = offset === 0;
             const isVisible = Math.abs(offset) <= 2;
@@ -478,7 +471,7 @@ export default function ProgressPage() {
           })}
         </div>
 
-        {/* ── Debate Phase (step 8) ── */}
+        {/* ── Debate Phase (step 9) ── */}
         <div className={`absolute inset-0 transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${isDebatePhase ? 'opacity-100 scale-100' : 'opacity-0 scale-105 pointer-events-none'}`}>
 
           {/* Advocate */}

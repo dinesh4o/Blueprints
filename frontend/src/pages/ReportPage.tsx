@@ -725,7 +725,7 @@ const HeroAlternativeMolecule = ({ cid }: { cid: number }) => {
   );
 };
 
-const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMode, setActiveSidebar }: any) => {
+const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMode, setActiveSidebar, useColor }: any) => {
   const [synthExpanded, setSynthExpanded] = useState(false);
   const synthesisTags = Array.from(new Set([
     report.molecule,
@@ -1036,6 +1036,71 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
         risks: report?.ai_analysis?.top_risks || []
       }} />
 
+      {/* Agent Attribution Chain */}
+      {report.agent_attributions?.length > 0 && (
+        <div className="mt-8 border border-zinc-800 rounded-xl bg-zinc-900/50 p-6">
+          <h3 className="text-lg font-semibold text-zinc-100 mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+            Agent Attribution Chain
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {report.agent_attributions.map((attr: any, i: number) => (
+              <div key={i} className="border border-zinc-800 rounded-lg p-4 bg-zinc-950/50 hover:border-zinc-700 transition-colors">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-mono font-bold text-indigo-400">{attr.agent}</span>
+                  <span className="text-xs text-zinc-500">{attr.evidence_count} evidence points</span>
+                </div>
+                <p className="text-sm text-zinc-300 leading-relaxed">{attr.insight}</p>
+                <div className="mt-3 flex items-center gap-2">
+                  <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                    <div
+                      className={clsx("h-full rounded-full transition-all duration-500", useColor ? '' : 'bg-zinc-500')}
+                      style={{
+                        width: `${(attr.confidence || 0) * 100}%`,
+                        ...(useColor ? { backgroundColor: (attr.confidence || 0) >= 0.7 ? '#4ade80' : (attr.confidence || 0) >= 0.4 ? '#fbbf24' : '#f87171' } : {}),
+                      }}
+                    />
+                  </div>
+                  <span className="text-xs text-zinc-500">{((attr.confidence || 0) * 100).toFixed(0)}%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Cross-Domain Reasoning */}
+      {report.cross_domain_reasoning?.length > 0 && (
+        <div className="mt-8 border border-zinc-800 rounded-xl bg-zinc-900/50 p-6">
+          <h3 className="text-lg font-semibold text-zinc-100 mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+            Cross-Domain Reasoning
+          </h3>
+          <div className="space-y-4">
+            {report.cross_domain_reasoning.map((reasoning: any, i: number) => (
+              <div key={i} className="border border-zinc-800 rounded-lg p-4 bg-zinc-950/50">
+                <div className="flex items-center gap-2 mb-2">
+                  {reasoning.domains?.map((d: string, j: number) => (
+                    <span key={j} className="text-xs font-mono px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                      {d}
+                    </span>
+                  ))}
+                  <span className="ml-auto text-xs text-zinc-500">{((reasoning.confidence || 0) * 100).toFixed(0)}% confidence</span>
+                </div>
+                <p className="text-sm text-zinc-300 leading-relaxed">{reasoning.insight}</p>
+                {reasoning.supporting_evidence?.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {reasoning.supporting_evidence.map((e: string, k: number) => (
+                      <span key={k} className="text-xs px-2 py-0.5 rounded bg-zinc-800/50 text-zinc-400">{e}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Regulatory Pathway Recommender */}
       <div className="mt-8">
         <RegulatoryPathway
@@ -1045,6 +1110,7 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
           repurposingCandidates={report.repurposing_candidates}
           phoenixScore={phoenixScore}
           targetData={report.target_data}
+          useColor={useColor}
         />
       </div>
 
@@ -1058,6 +1124,7 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
           ipScore={(report.patent_data || []).length === 0 ? 8 : Math.max(2, 10 - (report.patent_data || []).length)}
           evidenceScore={Math.min(10, (report.literature_data || []).length * 0.5 + (report.clinical_data || []).length * 0.3)}
           noveltyScore={report.pubchem_data?.mechanism_of_action ? 7 : 5}
+          useColor={useColor}
         />
       </div>
 
@@ -1094,6 +1161,7 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
       </div>
 
       {/* Repurposing Verdict */}
+      <div className="">
       <RepurposingVerdict
         molecule={report.molecule}
         clinicalData={Array.isArray(report.clinical_data) ? report.clinical_data : []}
@@ -1103,7 +1171,9 @@ const OverviewTab = ({ report, onStartSimulation, structureMode, setStructureMod
         patentData={Array.isArray(report.patent_data) ? report.patent_data : []}
         phoenixScore={phoenixScore ?? undefined}
         repurposingCandidates={Array.isArray(report.repurposing_candidates) ? report.repurposing_candidates : []}
+        useColor={useColor}
       />
+      </div>
     </div>
   );
 };
@@ -1187,7 +1257,7 @@ const ClinicalAndIPTab = ({ report }: any) => (
   </div>
 );
 
-const ScienceTab = ({ report, setActiveSidebar }: any) => {
+const ScienceTab = ({ report, setActiveSidebar, useColor }: any) => {
   const pd = report.pubchem_data || {};
   const td = report.target_data || {};
   const faersReactions = report.regulatory_data?.faers_reactions || [];
@@ -1314,7 +1384,7 @@ const ScienceTab = ({ report, setActiveSidebar }: any) => {
             <SourceBadge api="ClinicalTrials.gov" endpoint="clinicaltrials.gov/api/v2/studies" url="https://clinicaltrials.gov" confidence="High" note="Bubble size = trial count, color = phase advancement" />
           </h3>
           <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4 overflow-hidden">
-            <IndicationMatrix clinicalData={report.clinical_data} />
+            <IndicationMatrix clinicalData={report.clinical_data} useColor={useColor} />
           </div>
         </div>
       )}
@@ -1704,12 +1774,26 @@ export default function ReportPage() {
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [shareState, setShareState] = useState<'idle' | 'loading' | 'copied'>('idle');
+
   const [currency, setCurrency] = useState<'USD' | 'INR'>('INR');
-  const [structureMode, setStructureMode] = useState<'2d' | '3d'>('2d');
+  const [structureMode, setStructureMode] = useState<'2d' | '3d'>('3d');
   const [compareMolecule, setCompareMolecule] = useState<'A' | 'B'>('A');
   const [twinVisited, setTwinVisited] = useState(false);
   const [activeSidebar, setActiveSidebar] = useState<'ai' | 'refs' | null>(null);
   const [viewMode, setViewMode] = useState<'scientist' | 'investor'>('scientist');
+  const [useColor, setUseColor] = useState(true);
+
+  // Ctrl+Shift+K toggles neutral/colored progress bars
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'K') {
+        e.preventDefault();
+        setUseColor(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   // Track when twin tab is first visited so we can lazy-mount it
   useEffect(() => {
@@ -1735,12 +1819,44 @@ export default function ReportPage() {
     document.addEventListener('mouseup', onMouseUp);
   }, [sidebarWidth]);
 
-  const [ragMessages, setRagMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([
-    { role: 'assistant', content: 'Hello! I am ready to answer any questions about this clinical report. Ask away!' }
-  ]);
+  // ── Persistent chat history (survives steer reruns within a session) ──
+  const STORAGE_KEY = `chat_history_${id}`;
+  const STEER_HISTORY_KEY = `steer_history_${id}`;
+  const [ragMessages, setRagMessages] = useState<{ role: 'user' | 'assistant'; content: string; suggestions?: string[] }[]>(() => {
+    try {
+      const saved = sessionStorage.getItem(STORAGE_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [{ role: 'assistant', content: 'Hello! I am ready to answer any questions about this clinical report. Ask away!' }];
+  });
+  // Steer history — ordered list of previous report versions
+  const [steerHistory, setSteerHistory] = useState<{ jobId: string; molecule: string; label: string }[]>(() => {
+    try {
+      const saved = sessionStorage.getItem(STEER_HISTORY_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
   const [ragInput, setRagInput] = useState('');
   const [ragLoading, setRagLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isVersionNavRef = useRef(false);
+
+  // Persist chat history to sessionStorage whenever it changes
+  useEffect(() => {
+    if (!id) return;
+    try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(ragMessages)); } catch {}
+  }, [ragMessages, id, STORAGE_KEY]);
+
+  // Persist steer history to sessionStorage whenever it changes
+  useEffect(() => {
+    if (!id) return;
+    try { sessionStorage.setItem(STEER_HISTORY_KEY, JSON.stringify(steerHistory)); } catch {}
+  }, [steerHistory, id, STEER_HISTORY_KEY]);
+
+  // Steer mode — only changes which backend endpoint is called
+  const [chatMode, setChatMode] = useState<'ask' | 'steer'>('ask');
+  const [activeConstraints, setActiveConstraints] = useState<Array<{ type: string; field: string; value: string }>>([]);
 
   useEffect(() => {
     if (!id) return;
@@ -1778,7 +1894,8 @@ export default function ReportPage() {
   };
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = messagesEndRef.current;
+    if (el) el.scrollIntoView({ behavior: 'instant', block: 'end' });
   }, [ragMessages, activeSidebar]);
 
   const handleRagSubmit = async (e: React.FormEvent, quickMsg?: string) => {
@@ -1788,12 +1905,72 @@ export default function ReportPage() {
     setRagMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setRagInput('');
     setRagLoading(true);
+
+    // ── STEER MODE: route to converse endpoint ──
+    if (chatMode === 'steer') {
+      setRagMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+      try {
+        const res = await fetch(`/api/converse/${id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ message: userMessage }),
+        });
+        if (!res.ok) throw new Error('Failed');
+        const data = await res.json();
+        let reply = data.response || '';
+        // Append constraint/agent badges as text
+        if (data.constraints?.length) {
+          reply += '\n\n' + data.constraints.map((c: any) => `🔹 ${c.type}: ${c.value}`).join('\n');
+        }
+        if (data.agentActions?.length) {
+          reply += '\n' + data.agentActions.map((a: any) => `↻ Re-running ${a.agent}`).join('\n');
+        }
+        if (data.needsRerun && data.rerunJobId) {
+          reply += '\n\n⚡ Re-analysis triggered — redirecting to progress...';
+          const agents = (data.rerunAgents || []).join(',');
+          const newStorageKey = `chat_history_${data.rerunJobId}`;
+          const newSteerHistoryKey = `steer_history_${data.rerunJobId}`;
+          // Build updated history: current report becomes a history entry
+          const currentMolecule = report?.molecule || 'Unknown';
+          const existingHistory = steerHistory;
+          const versionNum = existingHistory.length + 1;
+          const newEntry = { jobId: id!, molecule: currentMolecule, label: `v${versionNum} — ${currentMolecule}` };
+          const updatedHistory = [...existingHistory, newEntry];
+          setSteerHistory(updatedHistory);
+          setTimeout(() => {
+            try {
+              // Save stable self-label for current job so it can be identified correctly later
+              sessionStorage.setItem(`steer_self_label_${id}`, newEntry.label);
+              // Carry chat history to new job
+              const current = sessionStorage.getItem(STORAGE_KEY);
+              if (current) sessionStorage.setItem(newStorageKey, current);
+              // Carry steer history to new job
+              sessionStorage.setItem(newSteerHistoryKey, JSON.stringify(updatedHistory));
+            } catch {}
+            navigate(`/progress/${data.rerunJobId}?steer=1${agents ? `&agents=${agents}` : ''}`);
+          }, 1200);
+        }
+        if (data.activeConstraints) setActiveConstraints(data.activeConstraints);
+        setRagMessages(prev => { const m = [...prev]; m[m.length - 1] = { role: 'assistant', content: reply }; return m; });
+      } catch {
+        setRagMessages(prev => { const m = [...prev]; m[m.length - 1] = { role: 'assistant', content: 'Error connecting to orchestrator. Please try again.' }; return m; });
+      }
+      setRagLoading(false);
+      return;
+    }
+
+    // ── ASK MODE: stream from Claude ──
     setRagMessages(prev => [...prev, { role: 'assistant', content: '' }]);
     try {
       const res = await fetch(`/api/claude/chat/${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMessage }),
+        body: JSON.stringify({
+          message: userMessage,
+          // Pass steered version IDs so backend can merge all versions' data
+          steerVersionIds: steerHistory.map(h => h.jobId),
+        }),
       });
       if (!res.ok || !res.body) {
         setRagMessages(prev => { const m = [...prev]; m[m.length - 1] = { role: 'assistant', content: 'Error: could not connect to Claude AI.' }; return m; });
@@ -1803,6 +1980,7 @@ export default function ReportPage() {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buf = '';
+      let aiResponse = '';
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -1818,11 +1996,47 @@ export default function ReportPage() {
             if (parsed.error) {
               setRagMessages(prev => { const m = [...prev]; m[m.length - 1] = { role: 'assistant', content: `Error: ${parsed.error}` }; return m; });
             } else if (parsed.token) {
+              aiResponse += parsed.token;
               setRagMessages(prev => { const m = [...prev]; m[m.length - 1] = { role: 'assistant', content: m[m.length - 1].content + parsed.token }; return m; });
             }
           } catch { /* skip malformed SSE */ }
         }
       }
+      // Dynamic suggestions derived from what the AI actually said (not just what user asked)
+      const r = aiResponse.toLowerCase();
+      const u = userMessage.toLowerCase();
+      const namedEntities = [...aiResponse.matchAll(/\b([A-Z][a-z]{3,}(?:mab|nib|lib|vir|stat|pril|ide|ine|one)?(?:-[A-Z][a-z]+)?(?:\s[A-Z][a-z]{2,})?)/g)]
+        .map(m => m[1]).filter(n => !['This','That','The','When','What','How','Which','With','From','About','Also','Based','Such','They','Their','These','However','Therefore'].includes(n));
+      const conditionMatch = [...aiResponse.matchAll(/\b(Type \d [Dd]iabetes|[A-Z][a-z]+ [Cc]ancer|[A-Z][a-z]+emia|[A-Z][a-z]+osis|[A-Z][a-z]+itis|[A-Z][a-z]+oma|[A-Z][a-z]+ [Dd]isease|[A-Z][a-z]+ [Ss]yndrome)/g)].map(m => m[1]);
+      const firstCondition = conditionMatch[0] || '';
+      const firstEntity = namedEntities[0] || '';
+      const dynamicSuggestions: string[] =
+        r.includes('eliminat') || r.includes('deprioritiz')
+          ? [firstEntity ? `Why was ${firstEntity} eliminated?` : 'What criteria led to elimination?', 'Are there any salvageable candidates?']
+        : r.includes('adverse') || r.includes('side effect') || r.includes('toxic') || r.includes('contraindic')
+          ? [firstCondition ? `What monitoring protocols exist for ${firstCondition}?` : 'Are there any black box warnings?', 'How does this compare to the standard of care?']
+        : (r.includes('phase') || r.includes('clinical trial') || r.includes('enrolled')) && firstCondition
+          ? [`What are the Phase 3 endpoints for ${firstCondition}?`, 'What is the estimated approval timeline?']
+        : r.includes('phase') || r.includes('clinical trial') || r.includes('enrolled')
+          ? ['What are the primary trial endpoints?', 'What is the estimated approval timeline?']
+        : r.includes('fda') || r.includes('ema') || r.includes('regulatory') || r.includes('approval')
+          ? ['Is orphan drug designation applicable?', 'What is the fastest approval pathway?']
+        : (r.includes('billion') || r.includes('market size') || r.includes('revenue')) && firstCondition
+          ? [`Who are the main competitors for ${firstCondition}?`, 'What is the 5-year growth forecast?']
+        : r.includes('billion') || r.includes('market size') || r.includes('revenue')
+          ? ['Who are the main competitors in this space?', 'When is patent expiry expected?']
+        : r.includes('patent') || r.includes('exclusiv') || r.includes('generic')
+          ? ['Which IP strategy is recommended?', 'When is generic competition expected?']
+        : r.includes('mechanism') || r.includes('pathway') || r.includes('receptor') || r.includes('target')
+          ? ['Are there known resistance mechanisms?', 'What companion biomarkers are relevant?']
+        : r.includes('repurpos') || r.includes('score') || r.includes('candidat')
+          ? [firstCondition ? `What is the clinical evidence for ${firstCondition}?` : 'What drives the repurposing score?', 'Which indication has the most supporting evidence?']
+        : firstEntity
+          ? [`What is ${firstEntity}'s current development status?`, 'What are the next key milestones?']
+        : u.includes('why') || u.includes('how') || u.includes('explain')
+          ? ['Can you provide supporting references?', 'What are the key risk factors?']
+        : ['What are the next development steps?', 'How does this compare to similar drugs?'];
+      setRagMessages(prev => { const m = [...prev]; m[m.length - 1] = { ...m[m.length - 1], suggestions: dynamicSuggestions }; return m; });
     } catch {
       setRagMessages(prev => { const m = [...prev]; m[m.length - 1] = { role: 'assistant', content: 'Network error — could not reach Claude AI.' }; return m; });
     }
@@ -2013,6 +2227,8 @@ export default function ReportPage() {
                     : shareState === 'copied' ? <Check size={16} />
                     : <Share2 size={16} />}
                 </button>
+
+
               </div>
               <div className="flex items-center gap-2 mt-1 text-xs font-medium text-zinc-500">
                 <span onClick={() => navigate('/search')} className="hover:text-zinc-300 cursor-pointer transition-colors">Search</span>
@@ -2101,7 +2317,7 @@ export default function ReportPage() {
               ) : viewMode === 'investor' ? (
                 <InvestorOverview report={report} formatMarketSize={formatMarketSize} />
               ) : (
-                <OverviewTab report={report} onStartSimulation={() => setShowSimulation(true)} structureMode={structureMode} setStructureMode={setStructureMode} setActiveSidebar={setActiveSidebar} />
+                <OverviewTab report={report} onStartSimulation={() => setShowSimulation(true)} structureMode={structureMode} setStructureMode={setStructureMode} setActiveSidebar={setActiveSidebar} useColor={useColor} />
               )}
             </div>
 
@@ -2123,7 +2339,7 @@ export default function ReportPage() {
 
             {/* Science tab */}
             <div className={activeTab === 'science' ? '' : 'hidden'}>
-              <ScienceTab report={compareReport && compareMolecule === 'B' ? compareReport : report} setActiveSidebar={setActiveSidebar} />
+              <ScienceTab report={compareReport && compareMolecule === 'B' ? compareReport : report} setActiveSidebar={setActiveSidebar} useColor={useColor} />
             </div>
 
             {/* Market tab */}
@@ -2183,6 +2399,70 @@ export default function ReportPage() {
                 </Button>
               </div>
 
+              {/* ── Steer History ── */}
+              {steerHistory.length > 0 && (
+                <div className="px-4 py-2 border-b border-zinc-800/40 bg-zinc-950/50">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <Clock size={10} className="text-zinc-600" />
+                    <span className="text-[10px] font-medium text-zinc-600 uppercase tracking-wider">Previous Steered Versions</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {steerHistory.map((entry, i) => (
+                      <button
+                        key={entry.jobId}
+                        onClick={() => {
+                          if (isVersionNavRef.current) return;
+                          isVersionNavRef.current = true;
+                          try {
+                            // Copy current chat to target
+                            const targetChatKey = `chat_history_${entry.jobId}`;
+                            const targetHistoryKey = `steer_history_${entry.jobId}`;
+                            const currentChat = sessionStorage.getItem(STORAGE_KEY);
+                            if (currentChat) sessionStorage.setItem(targetChatKey, currentChat);
+
+                            // Stable self-label for the current job
+                            const selfLabel =
+                              sessionStorage.getItem(`steer_self_label_${id}`) ||
+                              `v${steerHistory.length + 1} — ${report?.molecule || 'Unknown'}`;
+                            const currentEntry = { jobId: id!, molecule: report?.molecule || 'Unknown', label: selfLabel };
+
+                            // Merge: existing target history + our full chain + current job, dedup by jobId, exclude target itself
+                            const existingTarget: { jobId: string; molecule: string; label: string }[] = (() => {
+                              try { const s = sessionStorage.getItem(targetHistoryKey); return s ? JSON.parse(s) : []; } catch { return []; }
+                            })();
+                            const merged = [...existingTarget, ...steerHistory, currentEntry];
+                            const seen = new Set<string>();
+                            const historyForTarget = merged.filter(h => {
+                              if (h.jobId === entry.jobId) return false;
+                              if (seen.has(h.jobId)) return false;
+                              seen.add(h.jobId);
+                              return true;
+                            });
+                            sessionStorage.setItem(targetHistoryKey, JSON.stringify(historyForTarget));
+                          } catch {}
+                          navigate(`/report/${entry.jobId}`);
+                        }}
+                        className="text-[11px] px-2.5 py-1 rounded-full bg-violet-500/10 border border-violet-500/25 text-violet-400 hover:bg-violet-500/20 hover:border-violet-500/50 hover:text-violet-300 transition-colors"
+                        title={`Open ${entry.label} with current chat`}
+                      >
+                        {entry.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Active Constraints Banner ── */}
+              {activeConstraints.length > 0 && (
+                <div className="px-4 py-2 border-b border-zinc-800/40 bg-zinc-950/50 flex flex-wrap gap-1.5">
+                  {activeConstraints.map((c, i) => (
+                    <span key={i} className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                      {c.type}: {c.value}
+                    </span>
+                  ))}
+                </div>
+              )}
+
               <div className="flex-1 p-4 overflow-y-auto bg-[#000000]">
                 {ragMessages.length <= 1 ? (
                   <div className="flex flex-col items-center justify-center text-center h-full pt-6">
@@ -2218,19 +2498,31 @@ export default function ReportPage() {
                           msg.role === 'user' ? "bg-zinc-700 text-white border-zinc-600" : "bg-[#18181b] text-zinc-400 border-[#27272a]")}>
                           {msg.role === 'user' ? <User size={14} /> : <Sparkles size={14} />}
                         </div>
-                        <div className={clsx("px-4 py-2 rounded-2xl max-w-[80%] text-sm leading-relaxed whitespace-pre-wrap",
-                          msg.role === 'user' ? "bg-zinc-800 text-zinc-100" : "bg-[#18181b] border border-[#27272a] text-zinc-300 [&>p]:mb-2 [&>ul]:list-disc [&>ul]:pl-5 [&>ol]:list-decimal [&>ol]:pl-5 [&>h1]:text-xl [&>h1]:font-bold [&>h2]:text-lg [&>h2]:font-bold [&>h3]:text-base [&>h3]:font-bold [&>p:last-child]:mb-0 [&>strong]:text-zinc-200")}>
-                          {msg.role === 'user' ? (
-                            msg.content
-                          ) : (
-                            <ReactMarkdown>{msg.content}</ReactMarkdown>
-                          )}
-                          {msg.role === 'assistant' && msg.content === '' && ragLoading && (
-                            <span className="inline-flex items-center gap-1 ml-1">
-                              <span className="w-1 h-1 rounded-full bg-zinc-500 animate-bounce"></span>
-                              <span className="w-1 h-1 rounded-full bg-zinc-500 animate-bounce" style={{ animationDelay: '0.15s' }}></span>
-                              <span className="w-1 h-1 rounded-full bg-zinc-500 animate-bounce" style={{ animationDelay: '0.3s' }}></span>
-                            </span>
+                        <div className="flex flex-col gap-1.5 max-w-[80%]">
+                          <div className={clsx("px-4 py-2 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap",
+                            msg.role === 'user' ? "bg-zinc-800 text-zinc-100" : "bg-[#18181b] border border-[#27272a] text-zinc-300 [&>p]:mb-2 [&>ul]:list-disc [&>ul]:pl-5 [&>ol]:list-decimal [&>ol]:pl-5 [&>h1]:text-xl [&>h1]:font-bold [&>h2]:text-lg [&>h2]:font-bold [&>h3]:text-base [&>h3]:font-bold [&>p:last-child]:mb-0 [&>strong]:text-zinc-200")}>
+                            {msg.role === 'user' ? (
+                              msg.content
+                            ) : (
+                              <ReactMarkdown>{msg.content}</ReactMarkdown>
+                            )}
+                            {msg.role === 'assistant' && msg.content === '' && ragLoading && (
+                              <span className="inline-flex items-center gap-1 ml-1">
+                                <span className="w-1 h-1 rounded-full bg-zinc-500 animate-bounce"></span>
+                                <span className="w-1 h-1 rounded-full bg-zinc-500 animate-bounce" style={{ animationDelay: '0.15s' }}></span>
+                                <span className="w-1 h-1 rounded-full bg-zinc-500 animate-bounce" style={{ animationDelay: '0.3s' }}></span>
+                              </span>
+                            )}
+                          </div>
+                          {msg.role === 'assistant' && msg.suggestions && msg.suggestions.length > 0 && !ragLoading && (
+                            <div className="flex flex-wrap gap-1.5 mt-0.5">
+                              {msg.suggestions.map((s, si) => (
+                                <button key={si} onClick={(e) => handleRagSubmit(e as any, s)} disabled={ragLoading}
+                                  className="text-xs text-zinc-400 border border-zinc-700/60 hover:border-zinc-500 hover:text-zinc-200 rounded-full px-3 py-1 transition-colors bg-zinc-900/60 disabled:opacity-40">
+                                  {s}
+                                </button>
+                              ))}
+                            </div>
                           )}
                         </div>
                       </div>
@@ -2240,21 +2532,46 @@ export default function ReportPage() {
                 )}
               </div>
               <div className="p-4 border-t border-zinc-800/60 bg-zinc-950">
-                <form className="flex gap-2 relative" onSubmit={(e) => handleRagSubmit(e)}>
-                  <Input value={ragInput} onChange={(e: any) => setRagInput(e.target.value)}
-                    placeholder="Ask a question..." disabled={ragLoading}
-                    className="flex-1 bg-zinc-900/80 border border-zinc-800/60 text-zinc-100 placeholder:text-zinc-500 px-4 py-6 pr-12 focus-visible:ring-1 focus-visible:ring-cyan-500/50 focus-visible:ring-offset-0 rounded-xl outline-none" />
-                  <Button type="submit" size="icon" disabled={ragLoading || !ragInput.trim()}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-zinc-800 hover:bg-zinc-700 text-white disabled:bg-transparent disabled:text-zinc-600 rounded-full h-8 w-8 flex items-center justify-center border-none">
-                    <Send size={14} />
-                  </Button>
+                <form className="flex gap-2 items-center" onSubmit={(e) => handleRagSubmit(e)}>
+                  <button
+                    type="button"
+                    onClick={() => setChatMode(chatMode === 'ask' ? 'steer' : 'ask')}
+                    title={chatMode === 'ask' ? 'Enable Steer mode — AI will translate your messages into pipeline constraints' : 'Disable Steer mode — back to normal Q&A'}
+                    className={clsx(
+                      'relative flex-none w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300 border',
+                      chatMode === 'steer'
+                        ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-400 shadow-[0_0_12px_rgba(99,102,241,0.4)]'
+                        : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700'
+                    )}
+                  >
+                    <Zap size={15} />
+                    {chatMode === 'steer' && (
+                      <span className="absolute inset-0 rounded-xl animate-ping bg-indigo-500/20 pointer-events-none" style={{ animationDuration: '2s' }} />
+                    )}
+                  </button>
+                  <div className="relative flex-1">
+                    <Input value={ragInput} onChange={(e: any) => setRagInput(e.target.value)}
+                      placeholder={chatMode === 'steer' ? 'Steer: add constraints, filter, re-run agents...' : 'Ask a question...'}
+                      disabled={ragLoading}
+                      className={clsx(
+                        'w-full bg-zinc-900/80 text-zinc-100 placeholder:text-zinc-500 px-4 py-6 pr-12 focus-visible:ring-1 focus-visible:ring-offset-0 rounded-xl outline-none border',
+                        chatMode === 'steer' ? 'border-indigo-500/30 focus-visible:ring-indigo-500/50' : 'border-zinc-800/60 focus-visible:ring-cyan-500/50'
+                      )} />
+                    <Button type="submit" size="icon" disabled={ragLoading || !ragInput.trim()}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 bg-zinc-800 hover:bg-zinc-700 text-white disabled:bg-transparent disabled:text-zinc-600 rounded-full h-8 w-8 flex items-center justify-center border-none">
+                      <Send size={14} />
+                    </Button>
+                  </div>
                 </form>
                 <div className="flex justify-between items-center mt-3 px-1">
                   <p className="text-xs text-zinc-500">
-                    AI can make mistakes. <a href="#" className="underline hover:text-zinc-300">Learn more</a>
+                    {chatMode === 'steer' ? 'Steer mode — constraints will be applied' : 'AI can make mistakes.'}
                   </p>
                   <p className="text-xs text-zinc-500 flex items-center gap-1">
-                    <Sparkles size={10} className="inline text-cyan-400" /> Gemini
+                    {chatMode === 'steer'
+                      ? <><Zap size={10} className="inline text-indigo-400" /> Orchestrator</>
+                      : <><Sparkles size={10} className="inline text-cyan-400" /> Blueprints AI</>
+                    }
                   </p>
                 </div>
               </div>

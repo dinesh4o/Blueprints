@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, Activity, FileText, Sparkles, BrainCircuit, Send,
-  ChevronRight, ArrowRight, CheckCircle, Database, FlaskConical,
+  ChevronRight, ArrowRight, CheckCircle, FlaskConical,
   TrendingUp, Shield, Microscope, Network, Bot, Gavel,
   BookOpen, TestTube, BarChart3, Check, Zap, Menu, X,
 } from 'lucide-react';
@@ -106,19 +106,10 @@ const AGENTS = [
     name: 'Synthesis Lead Agent',
     icon: <BrainCircuit className="w-4 h-4" />,
     desc: 'The orchestrator. Ingests all sub-agent outputs to compute the Phoenix Score and report insights.',
-    highlight: true,
   },
 ];
 
-const DATA_SOURCES = [
-  { name: 'ClinicalTrials.gov', desc: 'Clinical trial phases & status',    color: 'text-blue-500 dark:text-blue-400'   },
-  { name: 'PubChem',            desc: 'Molecular properties & chemistry',  color: 'text-emerald-500 dark:text-emerald-400' },
-  { name: 'Semantic Scholar',   desc: 'Scientific literature & citations', color: 'text-cyan-500 dark:text-cyan-400' },
-  { name: 'USPTO PatentsView',  desc: 'Patent filings & IP landscape',     color: 'text-amber-500 dark:text-amber-400'  },
-  { name: 'Open Targets',       desc: 'Disease–target associations',       color: 'text-rose-500 dark:text-rose-400'    },
-  { name: 'openFDA',            desc: 'Drug approvals & adverse events',   color: 'text-cyan-500 dark:text-cyan-400'    },
-  { name: 'NCBI / PubMed',      desc: 'Biomedical research database',      color: 'text-cyan-500 dark:text-cyan-400'},
-];
+const DATA_SOURCES_NAMES = ['ClinicalTrials.gov', 'PubChem', 'Semantic Scholar', 'USPTO PatentsView', 'Open Targets', 'openFDA', 'NCBI / PubMed', 'ChEMBL'];
 
 const REPORT_TABS = [
   { icon: <Sparkles className="w-4 h-4" />,     title: 'Overview',             desc: 'Executive summary, confidence scoring, and top repurposing candidates ranked by evidence strength.' },
@@ -139,41 +130,43 @@ const PRICING_PLANS = [
   {
     name: 'Explorer',
     price: 'Free',
-    period: 'forever',
+    period: '',
     desc: 'Perfect for exploring the capabilities of our AI pipeline.',
     features: [
-      'Up to 3 basic reports per month',
-      'Standard Phoenix Score formulation',
-      'Access to top 5 data sources',
-      'Community support'
+      '3 comprehensive reports/month',
+      'Standard confidence scoring',
+      'Top 5 data source integration',
+      'Community access'
     ],
     buttonText: 'Get Started',
     highlight: false,
   },
   {
     name: 'Researcher',
-    price: '₹499',
-    period: 'per user/month',
+    price: '₹999',
+    period: 'mo',
     desc: 'Advanced intelligence for dedicated researchers and labs.',
     features: [
-      'Unlimited comprehensive reports',
+      'Unlimited reports & runs',
       'Full 8-agent parallel execution',
-      'Patent & IP landscape analysis',
-      'Export to MDPI-style journal PDFs'
+      'Global IP & Patent analysis',
+      'PDF journal export & citation',
+      'Real-time safety heatmaps'
     ],
-    buttonText: 'Start Free Trial',
+    buttonText: 'Upgrade to Researcher',
     highlight: true,
   },
   {
-    name: 'Enterprise',
-    price: 'Custom',
-    period: 'billed annually',
+    name: 'Organization',
+    price: '₹2,499',
+    period: 'mo',
     desc: 'Tailored infrastructure for pharmaceutical companies.',
     features: [
       'Everything in Researcher',
       'Private data orchestration',
-      'Custom LLM fine-tuning',
-      'Dedicated account manager'
+      'Team collaboration & roles',
+      'Priority SLA support',
+      'REST API access'
     ],
     buttonText: 'Contact Sales',
     highlight: false,
@@ -186,18 +179,18 @@ function FeatureCard({ icon, title, description }: { icon: React.ReactNode; titl
     <motion.div
       whileHover={{ scale: 1.02 }}
       transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-      className="relative group bg-white/5 dark:bg-[#0c0c0e]/40 backdrop-blur-[24px] border border-slate-300/50 dark:border-slate-400/50 p-7 rounded-3xl flex flex-col shadow-[0_8px_32px_rgba(0,0,0,0.08),inset_0_1px_1px_rgba(255,255,255,0.4)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.06)] hover:border-slate-300/70 dark:hover:border-slate-300/80 hover:shadow-[0_16px_48px_rgba(0,50,200,0.1),inset_0_1px_1px_rgba(255,255,255,0.6)] dark:hover:shadow-[0_16px_48px_rgba(100,150,255,0.15),inset_0_1px_1px_rgba(255,255,255,0.15),0_0_20px_rgba(100,150,255,0.1)] transition-all duration-500 select-none h-full overflow-hidden"
+      className="relative group bg-white/[0.03] dark:bg-[#0c0c0e]/40 backdrop-blur-[24px] border border-zinc-200/20 dark:border-zinc-700/30 p-7 rounded-3xl flex flex-col shadow-none hover:border-zinc-300/40 dark:hover:border-zinc-600/50 hover:shadow-[0_8px_32px_rgba(0,0,0,0.04)] dark:hover:shadow-[0_8px_32px_rgba(0,0,0,0.3)] transition-all duration-500 select-none h-full overflow-hidden"
     >
-      <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent dark:from-white/5 opacity-50 dark:opacity-20 pointer-events-none" />
-      <div className="absolute -inset-0.5 bg-gradient-to-br from-blue-500/10 via-transparent to-emerald-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none blur-2xl rounded-3xl" />
+      <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent dark:from-white/[0.02] opacity-50 dark:opacity-20 pointer-events-none" />
+      <div className="absolute -inset-0.5 bg-gradient-to-br from-blue-500/5 via-transparent to-emerald-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none blur-2xl rounded-3xl" />
       
-      <div className="relative z-10 p-3 bg-white/60 dark:bg-white/5 border border-slate-300/50 dark:border-slate-400/50 backdrop-blur-md rounded-xl w-fit mb-5 group-hover:scale-110 group-hover:bg-white/80 dark:group-hover:bg-white/10 transition-all duration-500 ease-out shadow-[0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.2)]">
-        <span className="text-blue-600 dark:text-zinc-300">{icon}</span>
+      <div className="relative z-10 p-3 bg-white/30 dark:bg-white/5 border border-zinc-200/20 dark:border-zinc-700/30 backdrop-blur-md rounded-xl w-fit mb-5 group-hover:scale-110 group-hover:bg-white/50 dark:group-hover:bg-white/10 transition-all duration-500 ease-out shadow-none">
+        <span className="text-zinc-400 dark:text-zinc-500">{icon}</span>
       </div>
-      <h3 className="relative z-10 text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-2.5 tracking-tight drop-shadow-sm">
+      <h3 className="relative z-10 text-base font-semibold text-zinc-500 dark:text-zinc-400 mb-2.5 tracking-tight">
         {title}
       </h3>
-      <p className="relative z-10 text-zinc-600 dark:text-zinc-400 group-hover:text-zinc-700 dark:group-hover:text-zinc-300 transition-colors duration-300 leading-relaxed text-sm font-light">
+      <p className="relative z-10 text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-500 dark:group-hover:text-zinc-400 transition-colors duration-300 leading-relaxed text-sm font-light">
         {description}
       </p>
     </motion.div>
@@ -205,9 +198,9 @@ function FeatureCard({ icon, title, description }: { icon: React.ReactNode; titl
 }
 
 const HERO_OFFSETS_DESKTOP = [
-  { x: "-25.8vw", y: "-110vh", rotate: 10 },
-  { x: "25vw", y: "-113vh", rotate: -10 },
-  { x: "-20vw", y: "-90vh", rotate: -6 },
+  { x: "-25vw", y: "-110vh", rotate: 10 },
+  { x: "25vw", y: "-110vh", rotate: -10 },
+  { x: "-25vw", y: "-90vh", rotate: -6 },
   { x: "25vw", y: "-90vh", rotate: 8 },
 ];
 
@@ -266,11 +259,11 @@ export default function LandingPage() {
       return;
     }
     
-    if (planName === "Explorer" || planName === "Enterprise") {
+    if (planName === "Explorer" || planName === "Organization") {
         return;
     }
     
-    const amount = 49900; // ₹499 in paise
+    const amount = 99900; // ₹999 in paise
     
     const options: any = {
       key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_SHFkFDv4q8dkSo',
@@ -341,7 +334,7 @@ export default function LandingPage() {
             </>
           ) : (
             <button 
-              onClick={() => navigate("/search")}
+              onClick={() => navigate("/dashboard")}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-black text-xs font-bold uppercase tracking-widest rounded flex items-center gap-2 transition-colors"
             >
               DASHBOARD <ArrowRight className="w-3 h-3 -rotate-45" />
@@ -556,11 +549,11 @@ export default function LandingPage() {
                   viewport={{ once: true }}
                   className="flex flex-col items-center text-center"
                 >
-                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex items-center justify-center mb-4 sm:mb-5 relative z-10 shadow-sm">
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center mb-4 sm:mb-5 relative z-10 shadow-sm dark:shadow-[0_2px_12px_rgba(0,0,0,0.3)]">
                     <span className="text-sm sm:text-base font-bold text-zinc-800 dark:text-zinc-200 tracking-tight">{s.step}</span>
                   </div>
                   <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100 mb-2 leading-tight">{s.title}</h3>
-                  <p className="text-xs text-zinc-400 dark:text-zinc-500 leading-relaxed max-w-[260px] sm:max-w-none">{s.description}</p>
+                  <p className="text-xs text-zinc-400 dark:text-zinc-400 leading-relaxed max-w-[260px] sm:max-w-none">{s.description}</p>
                 </motion.div>
               ))}
             </div>
@@ -618,8 +611,8 @@ export default function LandingPage() {
                       {/* Border gradient effect */}
                       <div className={`absolute inset-0 rounded-2xl border transition-all duration-300 pointer-events-none ${
                         agent.highlight
-                          ? 'border-zinc-300 dark:border-zinc-600 shadow-md'
-                          : 'border-zinc-200/60 dark:border-zinc-700/60 group-hover:border-zinc-300 dark:group-hover:border-zinc-600'
+                          ? 'border-zinc-300 dark:border-zinc-500 shadow-md'
+                          : 'border-zinc-200/60 dark:border-zinc-600 group-hover:border-zinc-300 dark:group-hover:border-zinc-500'
                       }`} />
 
                       {/* Glow effect on hover */}
@@ -678,7 +671,7 @@ export default function LandingPage() {
                         <p className={`text-xs leading-relaxed flex-1 transition-colors duration-300 ${
                           agent.highlight
                             ? 'text-cyan-100/90 dark:text-cyan-200/80'
-                            : 'text-zinc-600 dark:text-zinc-400'
+                            : 'text-zinc-600 dark:text-zinc-300'
                         }`}>
                           {agent.desc}
                         </p>
@@ -701,51 +694,30 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ─── DATA SOURCES ─────────────────────────────────────────────────── */}
-      <section className="py-16 sm:py-24 md:py-32 px-4 sm:px-6 relative z-10 border-t border-zinc-100 dark:border-zinc-800/40">
-        <div className="max-w-5xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7 }}
-            viewport={{ once: true }}
-            className="text-center mb-16"
-          >
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 text-xs font-medium mb-6">
-              <Database size={12} />
-              REAL DATA ONLY
-            </div>
-            <h2 className="text-2xl sm:text-3xl md:text-5xl font-bold text-zinc-900 dark:text-white tracking-tight">
+      {/* ─── TRUSTED BY ─────────────────────────────────────────────────── */}
+      <section className="py-12 relative z-10 border-t border-zinc-100 dark:border-zinc-800/40">
+        <div className="container mx-auto px-6">
+          <div className="text-center mx-auto max-w-lg mb-8">
+            <h2 className="font-mono font-medium text-zinc-400 dark:text-zinc-500 uppercase text-xs tracking-widest">
               Powered by Real Data
             </h2>
-            <p className="text-zinc-500 dark:text-zinc-400 mt-4 text-lg font-light max-w-xl mx-auto">
-              Every insight is grounded in authoritative, real-time data from global scientific databases.
-            </p>
-          </motion.div>
-
-          <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-            {DATA_SOURCES.map((ds, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: i * 0.07 }}
-                viewport={{ once: true }}
-                className="bg-white/70 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 sm:p-5 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all duration-300 cursor-default"
-              >
-                <div className={`text-sm sm:text-base font-bold mb-1.5 ${ds.color}`}>{ds.name}</div>
-                <div className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 font-medium leading-relaxed">{ds.desc}</div>
-              </motion.div>
-            ))}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.49 }}
-              viewport={{ once: true }}
-              className="bg-zinc-800 border border-zinc-700 rounded-2xl p-5 flex items-center justify-center"
-            >
-              <span className="text-xs font-medium text-zinc-400 flex items-center gap-1.5">+ more <ArrowRight size={11} /></span>
-            </motion.div>
+          </div>
+          <div className="relative">
+            <div className="group flex overflow-hidden" style={{ '--duration': '20s' } as React.CSSProperties}>
+              {[0, 1, 2].map((copyIdx) => (
+                <div key={copyIdx} className="flex shrink-0 animate-marquee" style={{ animationDirection: 'reverse', animationDuration: 'var(--duration)' }}>
+                  <div className="flex shrink-0">
+                    {DATA_SOURCES_NAMES.map((name) => (
+                      <div key={name} className="mx-8 flex items-center whitespace-nowrap">
+                        <span className="text-sm font-semibold tracking-tight text-zinc-400 dark:text-zinc-500">{name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-[#f8fafc] dark:from-black to-transparent" />
+            <div className="pointer-events-none absolute inset-y-0 right-0 w-1/3 bg-gradient-to-l from-[#f8fafc] dark:from-black to-transparent" />
           </div>
         </div>
       </section>
@@ -852,7 +824,7 @@ export default function LandingPage() {
 
                 <button
                   onClick={() => {
-                    if (plan.name === 'Enterprise') {
+                    if (plan.name === 'Organization') {
                       window.open('https://wa.me/916382957995', '_blank', 'noopener,noreferrer');
                     } else if (plan.name === 'Researcher') {
                         handleSubscriptionPay(plan.name, plan.price)

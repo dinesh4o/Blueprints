@@ -50,6 +50,89 @@ const renderContentWithLinks = (content: string) => {
   });
 };
 
+// ── Showcase threads: South Indian research community ─────────────────────────
+const SHOWCASE_THREADS: Thread[] = [
+  {
+    _id: 'showcase-t1',
+    author: 'Dr. Kavitha Rajendran',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=KavithaR&backgroundColor=c0aede',
+    title: 'Metformin + Temozolomide Synergy in GBM — Our Phase II Interim Results',
+    content: `We just completed interim analysis of our 64-patient Phase II at CMC Vellore. Metformin 1000 mg BID + standard TMZ protocol.\n\n📊 Key findings:\n- 23% improvement in 6-month PFS vs historical controls\n- AMPK phosphorylation increased 3.2x in tumour biopsies\n- No additional grade 3/4 toxicities attributable to metformin\n- MRI volumetric regression correlated with lactate:pyruvate ratio (r=0.71)\n\nWe're now planning the expansion cohort. Would love collaborators from neuro-oncology centres — especially those with access to CSF biomarkers.\n\nhttps://clinicaltrials.gov/search?term=metformin+glioblastoma`,
+    tags: ['Oncology', 'Metformin', 'GBM'],
+    upvotes: 34,
+    upvotedBy: [],
+    comments: [
+      { _id: 'sc1', author: 'Dr. Suresh Babu M.', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=SureshB&backgroundColor=b6e3f4', content: 'Remarkable PFS data. Have you stratified by MGMT methylation status? Our NIMHANS cohort shows differential metformin benefit in MGMT-unmethylated GBM.', timestamp: '2 days ago' },
+      { _id: 'sc2', author: 'Dr. Ananya Krishnan', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=AnanyaK&backgroundColor=ffd5dc', content: 'The lactate:pyruvate correlation is very interesting — suggests metabolic reprogramming. We can contribute MR spectroscopy data from our 40-patient imaging substudy at SCTIMST.', timestamp: '1 day ago' },
+    ],
+    timestamp: '3 days ago',
+    isProject: true,
+  },
+  {
+    _id: 'showcase-t2',
+    author: 'Prof. Arun Kumar S.',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=ArunK&backgroundColor=d1d4f9',
+    title: 'Lenalidomide Analogues Against MDR-TB: In-vitro MIC Data from NIRT Chennai',
+    content: `Our IIT Madras + NIRT collaboration has completed MIC testing of 12 thalidomide/lenalidomide derivatives against M. tuberculosis H37Rv and 4 MDR clinical isolates.\n\n🔬 Results summary:\n- Compound LND-7 shows MIC 2 µg/mL (better than parent lenalidomide at >64 µg/mL)\n- TNF-α suppression: IC50 = 0.3 µM in THP-1 macrophages\n- No cytotoxicity up to 50 µM (HepG2, HEK-293)\n- Synergy with rifampicin (FIC index 0.38)\n\nLooking for partners with access to mouse TB infection models for in-vivo validation. Happy to share compounds under MTA.\n\n#InfectiousDisease #DrugRepurposing`,
+    tags: ['TB', 'Immunomodulation', 'Medicinal Chemistry'],
+    upvotes: 28,
+    upvotedBy: [],
+    comments: [
+      { _id: 'sc3', author: 'Dr. Meenakshi Devi R.', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=MeenakshiD&backgroundColor=c0aede', content: 'The FIC index with rifampicin is very promising. We have BSL-3 aerosol infection facility at NIRT — can run acute TB mouse model within 8 weeks. Let\'s connect.', timestamp: '5 days ago' },
+    ],
+    timestamp: '1 week ago',
+    isProject: true,
+  },
+  {
+    _id: 'showcase-t3',
+    author: 'Dr. Lakshmi Narayanan K.',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=LakshmiN&backgroundColor=b6e3f4',
+    title: 'Pioglitazone in NASH: 38% Fibrosis Regression at 18 Months — Biopsy Data',
+    content: `Sharing results from our 200-patient open-label cohort at Sri Ramachandra University:\n\n🏥 Protocol: Pioglitazone 30mg daily + lifestyle modification vs lifestyle alone\n\n📈 18-month paired liver biopsy outcomes:\n- Fibrosis improvement ≥1 stage: 38% (pio) vs 12% (control)\n- NAS score reduction ≥2 points: 52% vs 19%\n- Mean ALT normalized: 78% vs 34%\n- Weight gain (expected): +2.8 kg mean\n- No CHF events, 3 peripheral edema (resolved)\n\nThe cost advantage is enormous — Pioglitazone costs ₹3/day vs ₹300/day for resmetirom. For the Indian NASH epidemic (estimated 40M patients), this could be transformative.\n\nManuscript under review at Hepatology.`,
+    tags: ['Hepatology', 'NASH', 'PPARγ'],
+    upvotes: 51,
+    upvotedBy: [],
+    comments: [
+      { _id: 'sc4', author: 'Dr. Senthil Murugan R.', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=SenthilM&backgroundColor=ffd5dc', content: '52% NAS improvement is excellent. How did you handle the weight gain confounder? Our Madurai cohort suggests combining with SGLT2i mitigates the weight issue while maintaining hepatic benefit.', timestamp: '4 days ago' },
+      { _id: 'sc5', author: 'Dr. Vasanthi Padmanabhan', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=VasanthiP&backgroundColor=d1d4f9', content: 'The cost-effectiveness argument is compelling. At ₹3/day, this should be in every primary health centre. We\'re running a similar protocol in the tribal population — different genotype distribution, interesting preliminary data.', timestamp: '3 days ago' },
+      { _id: 'sc6', author: 'Dr. Prakash Dorairaj', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=PrakashD&backgroundColor=b6e3f4', content: 'From the cardiology perspective — very reassuring safety data. No CHF in 200 patients over 18 months supports the recent meta-analysis. Would you consider a cardiac MRI substudy in your extension cohort?', timestamp: '2 days ago' },
+    ],
+    timestamp: '5 days ago',
+    isProject: false,
+  },
+  {
+    _id: 'showcase-t4',
+    author: 'Dr. Prakash Dorairaj',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=PrakashD&backgroundColor=b6e3f4',
+    title: 'Colchicine 0.5 mg for Post-MI Pericarditis: Retrospective Analysis of 1,200 STEMI Patients',
+    content: `Retrospective cohort from Kovai Medical Center (2019–2025):\n\n❤️ 1,200 STEMI patients, 340 received colchicine 0.5 mg/day within 48h of PCI\n\nResults:\n- Dressler syndrome: 4.1% (colchicine) vs 7.0% (no colchicine), p=0.04\n- Recurrent pericarditis at 1 year: 2.9% vs 8.2%, p<0.01\n- Post-PCI CRP at day 3: 12.4 vs 28.7 mg/L\n- No significant increase in GI adverse events\n- All-cause mortality: no difference (3.2% vs 3.5%)\n\nNLRP3 inflammasome suppression likely mediates the benefit. Planning a prospective RCT — need biostatistics collaborators for sample size calculation with the composite endpoint.\n\nhttps://clinicaltrials.gov/search?term=colchicine+pericarditis`,
+    tags: ['Cardiology', 'Inflammation', 'Colchicine'],
+    upvotes: 19,
+    upvotedBy: [],
+    comments: [
+      { _id: 'sc7', author: 'Dr. Nithya Ramanathan', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=NithyaR&backgroundColor=c0aede', content: 'Impressive CRP reduction. For the prospective trial, consider including IL-1β and IL-18 as NLRP3 pathway biomarkers — would strengthen the mechanistic story for publications.', timestamp: '6 days ago' },
+    ],
+    timestamp: '1 week ago',
+    isProject: false,
+  },
+  {
+    _id: 'showcase-t5',
+    author: 'Dr. Vijayalakshmi Thangaraj',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=VijayaT&backgroundColor=ffd5dc',
+    title: 'Topical Dapsone 7.5% Gel for Diabetic Foot Ulcers — RCT Results',
+    content: `Completed our RCT at Rajiv Gandhi Government Hospital (n=80):\n\n🦶 Dapsone 7.5% gel applied BID to Wagner Grade 2 diabetic foot ulcers\n\n12-week outcomes:\n- Complete wound closure: 62% (dapsone) vs 31% (standard care), p<0.001\n- Mean time to 50% area reduction: 3.2 vs 5.8 weeks\n- Bacterial biofilm reduction (confocal): 78% vs 42%\n- No systemic dapsone absorption detected (serum levels <0.1 µg/mL)\n\nMechanism: neutrophil chemotaxis modulation + anti-biofilm activity. The zero systemic absorption is critical for avoiding hemolytic anemia risk.\n\nManuscript accepted in Wound Repair and Regeneration. Happy to share protocol details.`,
+    tags: ['Wound Healing', 'Diabetes', 'Dapsone'],
+    upvotes: 26,
+    upvotedBy: [],
+    comments: [
+      { _id: 'sc8', author: 'Dr. Kumaran Selvam', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=KumaranS&backgroundColor=d1d4f9', content: 'Congratulations on the acceptance! The confocal biofilm data is a strong differentiator vs other topical approaches. We should explore this in venous leg ulcers too — similar inflammatory profile.', timestamp: '3 days ago' },
+      { _id: 'sc9', author: 'Dr. Shanthini Devi M.', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=ShanthiniD&backgroundColor=c0aede', content: 'Zero systemic absorption is remarkable for a 7.5% formulation. What\'s the vehicle? Our rheumatology patients on systemic dapsone for DH would benefit from understanding the pharmacokinetic barrier.', timestamp: '2 days ago' },
+    ],
+    timestamp: '4 days ago',
+    isProject: false,
+  },
+];
+
 export default function CommunityPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -91,11 +174,25 @@ export default function CommunityPage() {
       const res = await fetch("/api/community", { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
-        setThreads(data);
+        const apiThreads: Thread[] = (data || []).map((t: any) => ({
+          ...t,
+          timestamp: t.timestamp || (t.createdAt ? new Date(t.createdAt).toLocaleDateString() : 'recently'),
+          comments: (t.comments || []).map((c: any) => ({
+            ...c,
+            timestamp: c.timestamp || (c.createdAt ? new Date(c.createdAt).toLocaleDateString() : 'recently'),
+          })),
+        }));
+        // Append showcase threads after real ones
+        if (apiThreads.length === 0) {
+          setThreads(SHOWCASE_THREADS);
+        } else {
+          const realIds = new Set(apiThreads.map(t => t._id));
+          setThreads([...apiThreads, ...SHOWCASE_THREADS.filter(s => !realIds.has(s._id))]);
+        }
       }
     } catch (e) {
       console.error(e);
-      setThreads([]);
+      setThreads(SHOWCASE_THREADS);
     }
   };
 

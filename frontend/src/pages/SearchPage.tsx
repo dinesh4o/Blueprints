@@ -314,6 +314,7 @@ export default function SearchPage() {
 
         <nav className="hidden md:flex absolute left-1/2 -translate-x-1/2 items-center gap-6 text-xs font-semibold text-zinc-400 uppercase tracking-widest">
           <button onClick={() => navigate("/")} className="hover:text-zinc-200">HOME</button>
+          <button onClick={() => navigate("/dashboard")} className="hover:text-zinc-200">DASHBOARD</button>
           <button onClick={() => navigate("/community")} className="hover:text-zinc-200">COMMUNITY</button>
         </nav>
         

@@ -82,7 +82,7 @@ router.put("/:id", async (req, res) => {
     const thread = await Thread.findByIdAndUpdate(req.params.id, {
       title: req.body.title,
       content: req.body.content
-    }, { new: true });
+    }, { returnDocument: "after" });
     res.json(thread);
   } catch (error) {
     res.status(500).json({ error: "Failed to update thread" });
@@ -110,7 +110,7 @@ router.put("/:id/comments/:commentId", async (req, res) => {
     const thread = await Thread.findById(req.params.id);
     if (!thread) return res.status(404).json({ error: "Thread not found" });
     
-    const comment = thread.comments.id(req.params.commentId);
+    const comment = thread.comments.find((c: any) => c._id?.toString() === req.params.commentId);
     if (comment) {
       comment.content = req.body.content;
       await thread.save();

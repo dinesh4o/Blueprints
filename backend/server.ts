@@ -12,6 +12,7 @@ dotenv.config(); // fallback to local just in case
 
 import express from 'express';
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 import session from 'express-session';
 import MongoStore from 'connect-mongo';
 import cookieParser from 'cookie-parser';
@@ -20,6 +21,9 @@ import { connectDB } from './src/config/database';
 import passportConfig from './src/config/passport';
 import authRoutes from './src/routes/auth';
 import communityRoutes from './src/routes/community';
+import dashboardRoutes from './src/routes/dashboard';
+import adminRoutes from './src/routes/admin';
+
 import { Job } from './src/models/Job';
 
 import { generateReportLaTeX } from './src/lib/pdfGenerator';
@@ -299,9 +303,30 @@ function buildRepurposingCandidates(clinicalData: any[], marketData: Record<stri
     .slice(0, 12);
 }
 
+async function seedAdminUser() {
+  try {
+    const { User } = await import('./src/models/User');
+    const existing = await User.findOne({ email: 'admin@blueprints.demo' });
+    if (!existing) {
+      await User.create({
+        email: 'admin@blueprints.demo',
+        name: 'Admin',
+        password: 'Admin@1234',
+        authProvider: 'local',
+        role: 'admin',
+        plan: 'organization',
+        isActive: true,
+      });
+      console.log('[Seed] Demo admin created: admin@blueprints.demo / Admin@1234');
+    }
+  } catch (err) {
+    console.warn('[Seed] Admin seed skipped:', err);
+  }
+}
+
 async function startServer() {
   // Connect to MongoDB in background — don't block server startup
-  connectDB().catch(() => {});
+  connectDB().then(() => seedAdminUser()).catch(() => {});
 
   const app = express();
   const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -322,24 +347,32 @@ async function startServer() {
   app.use(express.json({ limit: '10mb' }));
   app.use(cookieParser());
 
-  // Session configuration with MongoDB store
-  app.use(
-    session({
-      secret: process.env.SESSION_SECRET || 'your-super-secret-session-key',
-      resave: false,
-      saveUninitialized: false,
-      store: MongoStore.create({
-        mongoUrl: process.env.MONGODB_URI || 'mongodb://localhost:27017/Blueprints26DB',
-        touchAfter: 24 * 3600, // Lazy session update (in seconds)
-      }),
-      cookie: {
-        secure: process.env.NODE_ENV === 'production',
-        httpOnly: true,
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      },
-    })
-  );
+  const sessionConfig: Parameters<typeof session>[0] = {
+    secret: process.env.SESSION_SECRET || 'your-super-secret-session-key',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === 'production',
+      httpOnly: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    },
+  };
+
+  const shouldUseMongoSessionStore =
+    process.env.ENABLE_MONGO_SESSION_STORE === 'true' ||
+    (process.env.NODE_ENV === 'production' && Boolean(process.env.MONGODB_URI));
+
+  if (shouldUseMongoSessionStore) {
+    sessionConfig.store = MongoStore.create({
+      mongoUrl: process.env.MONGODB_URI || 'mongodb://localhost:27017/Blueprints26DB',
+      touchAfter: 24 * 3600, // Lazy session update (in seconds)
+    });
+  } else {
+    console.warn('[Session] Using in-memory session store. Set ENABLE_MONGO_SESSION_STORE=true to force Mongo-backed sessions.');
+  }
+
+  app.use(session(sessionConfig));
 
   // Initialize Passport
   app.use(passportConfig.initialize());
@@ -348,10 +381,14 @@ async function startServer() {
   // Authentication routes
   app.use('/api/auth', authRoutes);
   app.use('/api/community', communityRoutes);
+  app.use('/api/dashboard', dashboardRoutes);
+  app.use('/api/admin', adminRoutes);
+
 
   // In-memory store for jobs and reports (simulating MongoDB)
   const jobs = new Map<string, any>();
   const reports = new Map<string, any>();
+  const conversations = new Map<string, any>();
 
   // API Routes
   app.get('/api/autocomplete', async (req, res) => {
@@ -444,7 +481,8 @@ async function startServer() {
       selectionMeta,
       status: 'running',
       steps: [
-        { name: 'PubChemAgent', label: 'PubChem Verify', status: 'running', log: 'Initializing...' },
+        { name: 'PlannerAgent', label: 'Research Planning', status: 'running', log: 'Generating research plan...' },
+        { name: 'PubChemAgent', label: 'PubChem Verify', status: 'waiting', log: 'Pending...' },
         { name: 'ClinicalAgent', label: 'Clinical Trials', status: 'waiting', log: 'Pending...' },
         { name: 'PatentAgent', label: 'Patent Search', status: 'waiting', log: 'Pending...' },
         { name: 'LiteratureAgent', label: 'Literature Search', status: 'waiting', log: 'Pending...' },
@@ -570,37 +608,126 @@ async function startServer() {
   // ─── Groq Ask AI — SSE Streaming endpoint ──────────────────────────────
   app.post('/api/claude/chat/:id', async (req, res) => {
     const reportId = req.params.id;
-    const { message } = req.body;
+    const { message, steerVersionIds } = req.body;
     const report = reports.get(reportId);
     const keys = getGroqKeys('chat');
 
     if (keys.length === 0) {
       return res.status(500).json({ error: 'GROQ_API_KEYS not configured on the server.' });
     }
-// 
+//
+    // Collect all steered versions' reports (those the frontend tracked)
+    const steerVersionReports: any[] = [];
+    if (Array.isArray(steerVersionIds)) {
+      for (const vid of steerVersionIds) {
+        const vReport = reports.get(vid);
+        if (vReport) steerVersionReports.push(vReport);
+      }
+    } 
     const mol       = report?.molecule || 'Unknown compound';
     const topOpp    = (report?.repurposing_candidates || []).slice(0, 3)
       .map((c: any) => `${c.condition} (viability: ${c.repurposing_score}/10)`).join('; ');
     const topRisks  = (report?.ai_analysis?.top_risks || []).slice(0, 3).join('; ');
+
+    // ── Build rich context from actual report data ──
+    const clinicalSummary = (report?.clinical_data || []).slice(0, 10).map((t: any) =>
+      `• ${t.nctId || t.NCTId || 'N/A'} — ${t.briefTitle || t.BriefTitle || t.title || 'Untitled'} | Phase: ${t.phase || t.Phase || 'N/A'} | Status: ${t.overallStatus || t.OverallStatus || t.status || 'N/A'} | Conditions: ${(t.conditions || t.Conditions || [t.condition]).join(', ') || 'N/A'}`
+    ).join('\n') || 'No clinical trials found in databases.';
+
+    const patentSummary = (report?.patent_data || []).slice(0, 10).map((p: any) =>
+      `• ${p.patent_id || p.patentNumber || p.id || 'N/A'} — ${p.title || p.patent_title || 'Untitled'} (${p.date || p.filing_date || p.year || 'N/A'})`
+    ).join('\n') || 'No specific patents found in patent databases for this compound\'s repurposing.';
+
+    const litSummary = (report?.literature_data || []).slice(0, 8).map((l: any) =>
+      `• "${l.title || 'Untitled'}" — ${l.authors?.[0] || l.author || 'Unknown'} (${l.year || l.pubDate || 'N/A'}) ${l.source || l.journal || ''} ${l.pmid ? `PMID:${l.pmid}` : ''} ${l.doi ? `DOI:${l.doi}` : ''}`
+    ).join('\n') || 'No publications found.';
+
+    const candidateSummary = (report?.repurposing_candidates || []).slice(0, 5).map((c: any) =>
+      `• ${c.condition} — Score: ${c.repurposing_score}/10, Max Phase: ${c.max_phase || 'N/A'}, Trials: ${c.trial_count ?? 'N/A'}, Market: $${c.market_size_usd_billion?.toFixed(1) || '?'}B`
+    ).join('\n') || 'None identified.';
+
+    // Include eliminated/low-score candidates so the AI can discuss them
+    const eliminatedCandidates = (report?.repurposing_candidates || []).filter((c: any) => (c.repurposing_score ?? 10) < 4);
+    const eliminatedSummary = eliminatedCandidates.length > 0
+      ? eliminatedCandidates.slice(0, 5).map((c: any) =>
+          `• ${c.condition} — Score: ${c.repurposing_score}/10 (eliminated: insufficient evidence or high risk)`
+        ).join('\n')
+      : '';
+
+    const debateSummary = report?.debate_data
+      ? `ADVOCATE: ${(report.debate_data.advocate || '').slice(0, 300)}...\nSKEPTIC: ${(report.debate_data.skeptic || '').slice(0, 300)}...\nJUDGE VERDICT: ${(report.debate_data.judge || '').slice(0, 300)}...`
+      : '';
+
+    const regulatoryInfo = (() => {
+      try {
+        if (!report?.regulatory_data) return '';
+        const indications = Array.isArray(report.regulatory_data.approved_indications)
+          ? report.regulatory_data.approved_indications.join(', ')
+          : String(report.regulatory_data.approved_indications || 'N/A');
+        const warnings = Array.isArray(report.regulatory_data.warnings)
+          ? report.regulatory_data.warnings.join(', ')
+          : String(report.regulatory_data.warnings || 'N/A');
+        return `Approved indications: ${indications}\nWarnings: ${warnings}`;
+      } catch { return ''; }
+    })();
+
     const systemPrompt =
-      `You are a strict expert medical informatics AI analyzing a drug repurposing research report. ` +
-      `You must ONLY answer questions specifically related to this medical context. Reject any general knowledge, pop-culture, or programming/coding inputs explicitly.\n\n` +
+      `You are Phoenix, an expert pharmaceutical AI assistant helping a researcher analyze a drug repurposing report.\n\n` +
       `COMPOUND: ${mol}\n` +
-      `PHOENIX REPURPOSING SCORE: ${report?.phoenix_score ?? 'N/A'}/10\n` +
-      `TOP REPURPOSING OPPORTUNITIES: ${topOpp || 'None identified'}\n` +
-      `KEY RISK FACTORS: ${topRisks || 'None identified'}\n` +
-      `CLINICAL TRIALS ANALYZED: ${(report?.clinical_data || []).length}\n` +
-      `PATENTS FOUND: ${(report?.patent_data || []).length}\n` +
-      `PUBLICATIONS ANALYZED: ${(report?.literature_data || []).length}\n` +
-      `MARKET ANALYSIS: ${(report?.market_analysis || []).map((m: any) => `${m.condition} $${m.market_size_usd_billion?.toFixed(1)}B`).slice(0, 3).join(', ')}\n\n` +
-      `Answer questions accurately based ONLY on this report data. Cite specific data points. ` +
-      `If the user asks an unrelated question (such as code or facts), reply EXACTLY with "Not available in report data." ` +
-      `Never hallucinate. If data is missing from the report, reply EXACTLY with "Not available in report data." Keep all clinical answers concise.`;
+      `PHOENIX REPURPOSING SCORE: ${report?.phoenix_score ?? 'N/A'}/10\n\n` +
+      `═══ REPURPOSING CANDIDATES ═══\n${candidateSummary}\n\n` +
+      (eliminatedSummary ? `═══ ELIMINATED / DEPRIORITIZED CANDIDATES ═══\n${eliminatedSummary}\n\n` : '') +
+      `═══ CLINICAL TRIALS (${(report?.clinical_data || []).length} found) ═══\n${clinicalSummary}\n\n` +
+      `═══ PATENT & IP DATA (${(report?.patent_data || []).length} found) ═══\n${patentSummary}\n\n` +
+      `═══ PUBLICATIONS (${(report?.literature_data || []).length} found) ═══\n${litSummary}\n\n` +
+      `═══ REGULATORY ═══\n${regulatoryInfo}\n\n` +
+      `═══ KEY RISK FACTORS ═══\n${topRisks || 'None identified'}\n\n` +
+      `═══ MARKET ANALYSIS ═══\n${(report?.market_analysis || []).map((m: any) => `${m.condition} $${m.market_size_usd_billion?.toFixed(1)}B (${m.growth_rate_pct}% CAGR)`).slice(0, 5).join('; ') || 'N/A'}\n\n` +
+      (debateSummary ? `═══ ADVOCATE / SKEPTIC DEBATE ═══\n${debateSummary}\n\n` : '') +
+      // Steered versions — compact diff-style summaries so the AI can compare across runs
+      (steerVersionReports.length > 0
+        ? steerVersionReports.map((vr: any, i: number) => {
+            const vCandidates = (vr?.repurposing_candidates || []).slice(0, 5)
+              .map((c: any) => `${c.condition} ${c.repurposing_score}/10`).join(', ');
+            const vRisks = (vr?.ai_analysis?.top_risks || []).slice(0, 2).join('; ');
+            const vDebate = vr?.debate_data
+              ? `Verdict: ${(vr.debate_data.judge || '').slice(0, 200)}`
+              : '';
+            return `═══ STEERED VERSION ${i + 1} — ${vr?.molecule || 'Unknown'} (Score: ${vr?.phoenix_score ?? '?'}/10) ═══\n` +
+              `Candidates: ${vCandidates || 'N/A'}\n` +
+              `Risks: ${vRisks || 'N/A'}\n` +
+              (vDebate ? `${vDebate}\n` : '') +
+              `Trials: ${(vr?.clinical_data || []).length} | Patents: ${(vr?.patent_data || []).length} | Publications: ${(vr?.literature_data || []).length}\n`;
+          }).join('\n') + '\n'
+        : '') +
+      `INSTRUCTIONS:\n` +
+      `You are a world-class pharmaceutical scientist. The report data above is your primary source, but you also have extensive biomedical knowledge.\n\n` +
+      `CRITICAL RULES:\n` +
+      `1. Answer ONLY what the user asked. If they ask about patents, talk about patents. If they ask "what about paracetamol", give a brief focused answer about that compound. Do NOT dump every category (trials, patents, publications, market, regulatory) unless specifically asked for a full overview.\n` +
+      `2. Keep answers SHORT — 3-6 sentences for simple questions, max 2-3 short paragraphs for complex ones. No walls of text.\n` +
+      `3. When the report has data, cite specific IDs/numbers. When it has 0 results for something, use your knowledge briefly — don't apologize or explain that "the report doesn't have data."\n` +
+      `4. Never fabricate trial NCT IDs. You may link to search pages like https://clinicaltrials.gov/search?term=<compound> if relevant.\n` +
+      `5. If a question is completely unrelated to medicine/pharmacology, politely decline.\n` +
+      `6. Sound like a knowledgeable scientist in a conversation, not a report generator.\n` +
+      `7. You CAN and SHOULD answer questions about eliminated or deprioritized candidates. Explain WHY they were eliminated (low score, safety flags, insufficient evidence) using the data above. Do not refuse to discuss them.\n` +
+      `8. When steered versions are present, you can compare results across versions (e.g. "in v1 the top candidate was X, in the current run it is Y"). Reference steered versions by "Steered Version 1", "Steered Version 2", etc.`;
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders();
+
+    // Track client disconnect to avoid writing to closed socket
+    let clientClosed = false;
+    req.on('close', () => { clientClosed = true; });
+    const safeWrite = (chunk: string) => { if (!clientClosed && !res.writableEnded) { try { res.write(chunk); } catch {} } };
+    const safeEnd = () => { if (!clientClosed && !res.writableEnded) { try { res.end(); } catch {} } };
+
+    // Truncate system prompt if too long (Groq 128K context, keep prompt under ~12K tokens ≈ 48K chars)
+    let finalSystemPrompt = systemPrompt;
+    if (finalSystemPrompt.length > 48000) {
+      finalSystemPrompt = finalSystemPrompt.slice(0, 48000) + '\n[...report data truncated for context limit]';
+    }
 
     let groqRes: any = null;
     let errText = '';
@@ -613,13 +740,14 @@ async function startServer() {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${key}`
           },
-          signal: AbortSignal.timeout(45000),
+          signal: AbortSignal.timeout(60000),
           body: JSON.stringify({
             model: 'llama-3.3-70b-versatile',
             messages: [
-              { role: 'system', content: systemPrompt },
+              { role: 'system', content: finalSystemPrompt },
               { role: 'user', content: message }
             ],
+            max_tokens: 512,
             stream: true
           }),
         });
@@ -647,8 +775,8 @@ async function startServer() {
     }
 
     if (!groqRes) {
-      res.write(`data: ${JSON.stringify({ error: `API error streams exhausted: ${errText.slice(0, 200)}` })}\n\n`);
-      res.end();
+      safeWrite(`data: ${JSON.stringify({ error: `API error streams exhausted: ${errText.slice(0, 200)}` })}\n\n`);
+      safeEnd();
       return;
     }
 
@@ -656,8 +784,8 @@ async function startServer() {
 
       const reader = (groqRes.body as any)?.getReader?.();
       if (!reader) {
-        res.write(`data: ${JSON.stringify({ error: 'Streaming not supported' })}\n\n`);
-        res.end();
+        safeWrite(`data: ${JSON.stringify({ error: 'Streaming not supported' })}\n\n`);
+        safeEnd();
         return;
       }
 
@@ -665,6 +793,7 @@ async function startServer() {
       let buffer = '';
 
       while (true) {
+        if (clientClosed) { try { reader.cancel(); } catch {} break; }
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
@@ -678,17 +807,18 @@ async function startServer() {
             const parsed = JSON.parse(data);
             const token = parsed.choices?.[0]?.delta?.content;
             if (token) {
-              res.write(`data: ${JSON.stringify({ token })}\n\n`);
+              safeWrite(`data: ${JSON.stringify({ token })}\n\n`);
             }
           } catch { /* ignore parse errors in stream chunks */ }
         }
       }
 
-      res.write('data: [DONE]\n\n');
-      res.end();
+      safeWrite('data: [DONE]\n\n');
+      safeEnd();
     } catch (err: any) {
-      res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
-      res.end();
+      console.error('[ChatStream] Stream error:', err.message);
+      safeWrite(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+      safeEnd();
     }
   });
   function normalizeDrugTerm(s: string): string {
@@ -789,13 +919,36 @@ async function startServer() {
     const isSimpleSingleWord = /^[A-Za-z]{3,20}$/.test(raw);
     if (!isSimpleSingleWord) return true;
 
+    // Check OpenFDA first (covers US drug names)
     const hasDrugLabelMatch = await hasOpenFDADrugLabelMatch(raw);
-    if (!hasDrugLabelMatch) {
-      console.warn(`[Validate] Rejected ambiguous term "${raw}" (PubChem match but no OpenFDA drug label name match).`);
-      return false;
+    if (hasDrugLabelMatch) return true;
+
+    // If OpenFDA misses (e.g. international names like "Paracetamol" vs US "Acetaminophen"),
+    // check PubChem synonyms for pharmaceutical markers (INN stems, DrugBank IDs, etc.)
+    if (primaryCID != null) {
+      try {
+        const synRes = await fetch(
+          `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${primaryCID}/synonyms/JSON`,
+          { signal: AbortSignal.timeout(8000) }
+        );
+        if (synRes.ok) {
+          const synData = await synRes.json() as any;
+          const synonyms: string[] = synData?.InformationList?.Information?.[0]?.Synonym || [];
+          // If any synonym contains DrugBank, USAN, INN, BAN, JAN markers or known drug DB prefixes, it's a drug
+          const drugMarkers = /drugbank|usan|inn\b|ban\b|jan\b|usp\b|nf\b|pharma|medication|tablet|capsule/i;
+          if (synonyms.some(s => drugMarkers.test(s))) return true;
+          // Also try a single fast OpenFDA check with the first different synonym (usually the INN/USAN name)
+          const altName = synonyms.find(s => !matchesDrugTerm(s, raw) && /^[A-Za-z]{3,30}$/.test(s));
+          if (altName) {
+            const altMatch = await hasOpenFDADrugLabelMatch(altName);
+            if (altMatch) return true;
+          }
+        }
+      } catch {}
     }
 
-    return true;
+    console.warn(`[Validate] Rejected ambiguous term "${raw}" (PubChem match but no OpenFDA drug label name match).`);
+    return false;
   }
 
   interface PromptConstraints {
@@ -1623,23 +1776,27 @@ Return valid JSON: {"molecule": "<drug name>", "reasoning": "<1-2 sentence expla
     };
   }
 
-  async function runPipeline(jobId: string, molecule: string) {
-    const updateStep = (index: number, status: string, log?: string, dataCount?: number) => {
+  async function runPipeline(jobId: string, molecule: string, constraints?: Array<{type: string; value: string; added_at?: string}>) {
+    const updateStep = (nameOrIndex: string | number, status: string, log?: string, dataCount?: number) => {
       const job = jobs.get(jobId);
-      if (job) {
-        job.steps[index].status = status;
-        if (log) job.steps[index].log = log;
-        if (dataCount !== undefined) job.steps[index].dataCount = dataCount;
-        jobs.set(jobId, job);
-      }
+      if (!job) return;
+      const step = typeof nameOrIndex === 'string'
+        ? job.steps.find((s: any) => s.name === nameOrIndex)
+        : job.steps[nameOrIndex];
+      if (!step) return; // Step not present in this run (e.g. steer rerun with subset of agents)
+      step.status = status;
+      if (log) step.log = log;
+      if (dataCount !== undefined) step.dataCount = dataCount;
+      jobs.set(jobId, job);
     };
 
     try {
-      updateStep(0, 'running', 'Verifying in registries...');
+      updateStep('PlannerAgent', 'done', 'Research plan generated.');
+      updateStep('PubChemAgent', 'running', 'Verifying in registries...');
       const isReal = await validateMolecule(molecule);
       if (!isReal) {
-         updateStep(0, 'done', 'No real-world data found.', 0);
-         updateStep(7, 'done', 'Processing bypassed.');
+         updateStep('PubChemAgent', 'done', 'No real-world data found.', 0);
+         updateStep('SynthesisAgent', 'done', 'Processing bypassed.');
          const job = jobs.get(jobId);
          if (job) {
            const report = {
@@ -1650,27 +1807,31 @@ Return valid JSON: {"molecule": "<drug name>", "reasoning": "<1-2 sentence expla
              created_at: new Date().toISOString(),
            };
            reports.set(jobId, report);
-        Job.findByIdAndUpdate(jobId, { status: 'completed', reportData: report, progress: 100, currentStep: 'Complete' }, { new: true }).catch(err => console.error('Failed to update DB', err));
-        Job.findByIdAndUpdate(jobId, { status: 'completed', reportData: report, progress: 100, currentStep: 'Complete' }, { new: true }).catch(err => console.error('Failed to update DB', err));
+        Job.findByIdAndUpdate(jobId, { status: 'completed', reportData: report, progress: 100, currentStep: 'Complete' }, { returnDocument: 'after' }).catch(err => console.error('Failed to update DB', err));
            job.status = 'complete'; jobs.set(jobId, job);
          }
          return;
       }
 
-      updateStep(1, 'running', 'Querying ClinicalTrials...');
-      updateStep(3, 'running', 'Querying PubMed...');
-      updateStep(4, 'running', 'Querying FDA Labels...');
+      updateStep('ClinicalAgent', 'running', 'Querying ClinicalTrials...');
+      updateStep('LiteratureAgent', 'running', 'Querying PubMed...');
+      updateStep('RegulatoryAgent', 'running', 'Querying FDA Labels...');
 
       await new Promise(r => setTimeout(r, 500));
-      updateStep(2, 'running', 'Searching USPTO...');
-      updateStep(5, 'running', 'Identifying disease targets...');
-      updateStep(6, 'running', 'Finding structural analogs...');
+      updateStep('PatentAgent', 'running', 'Searching USPTO...');
+      updateStep('TargetAgent', 'running', 'Identifying disease targets...');
+      updateStep('AnalogAgent', 'running', 'Finding structural analogs...');
 
       // Dynamically import LangGraph to avoid slowing down dev server boot time
       const { runPipeline: runLangGraphPipeline } = await import('./src/lib/agents/workflow');
 
       // Let LangGraph do all the parallel execution
-      const resultState = await runLangGraphPipeline(molecule);
+      const normalizedConstraints = constraints?.map(c => ({
+        type: c.type,
+        value: c.value,
+        added_at: c.added_at || new Date().toISOString(),
+      }));
+      const resultState = await runLangGraphPipeline(molecule, normalizedConstraints);
 
       // Map back to our simulated job state
       const clinicalData = resultState.clinicalData || [];
@@ -1683,17 +1844,17 @@ Return valid JSON: {"molecule": "<drug name>", "reasoning": "<1-2 sentence expla
       const pubchemLabel = pubchemExists === true
         ? `CID ${resultState.pubchemData?.cid || 'found'} — ${resultState.pubchemData?.molecular_formula || 'verified'}`
         : pubchemExists === false ? 'Not in PubChem (fake)' : 'PubChem timeout';
-      updateStep(0, 'done', pubchemLabel, pubchemExists ? 1 : 0);
+      updateStep('PubChemAgent', 'done', pubchemLabel, pubchemExists ? 1 : 0);
 
-      updateStep(1, 'done', 'Data retrieved.', clinicalData.length);
-      updateStep(2, 'done', `Found ${resultState.patentData?.length || 0} patents.`, resultState.patentData?.length || 0);
-      updateStep(3, 'done', 'Abstracts embedded.', literatureData.length);
-      updateStep(4, 'done', 'Label data parsed.', 1);
-      updateStep(5, 'done', `Found ${resultState.targetData?.targetsFound || 0} targets via ${resultState.targetData?.source || 'Open Targets'}.`, resultState.targetData?.targetsFound || 0);
+      updateStep('ClinicalAgent', 'done', 'Data retrieved.', clinicalData.length);
+      updateStep('PatentAgent', 'done', `Found ${resultState.patentData?.length || 0} patents.`, resultState.patentData?.length || 0);
+      updateStep('LiteratureAgent', 'done', 'Abstracts embedded.', literatureData.length);
+      updateStep('RegulatoryAgent', 'done', 'Label data parsed.', 1);
+      updateStep('TargetAgent', 'done', `Found ${resultState.targetData?.targetsFound || 0} targets via ${resultState.targetData?.source || 'Open Targets'}.`, resultState.targetData?.targetsFound || 0);
 
       const similarMolecules = resultState.similarMolecules || [];
-      updateStep(6, 'done', `${similarMolecules.length} structural analogs analyzed`, similarMolecules.length);
-      updateStep(7, 'running', 'Synthesizing report...');
+      updateStep('AnalogAgent', 'done', `${similarMolecules.length} structural analogs analyzed`, similarMolecules.length);
+      updateStep('SynthesisAgent', 'running', 'Synthesizing report...');
 
       // ── Start market estimates early (parallel with debate) ──
       const uniqueConditions = [...new Set(
@@ -1782,7 +1943,7 @@ AI Viability Score: ${resultState.viabilityScore}/10`;
       }
 
       await new Promise(r => setTimeout(r, 1000));
-      updateStep(7, 'done', 'Synthesis generated.');
+      updateStep('SynthesisAgent', 'done', 'Synthesis generated.');
       
       const job = jobs.get(jobId);
       if (job) {
@@ -1845,12 +2006,14 @@ AI Viability Score: ${resultState.viabilityScore}/10`;
             reasoning: resultState.analysisReport // Passed directly from Groq!
           },
           debate_data: debate_data || null,
+          research_plan: resultState.researchPlan || null,
+          agent_attributions: (resultState.agentAttributions || []).filter((attr: any, idx: number, arr: any[]) => arr.findIndex((a: any) => a.agent === attr.agent) === idx),
+          cross_domain_reasoning: resultState.crossDomainReasoning || [],
           created_at: new Date().toISOString(),
         };
 
         reports.set(jobId, report);
-        Job.findByIdAndUpdate(jobId, { status: 'completed', reportData: report, progress: 100, currentStep: 'Complete' }, { new: true }).catch(err => console.error('Failed to update DB', err));
-        Job.findByIdAndUpdate(jobId, { status: 'completed', reportData: report, progress: 100, currentStep: 'Complete' }, { new: true }).catch(err => console.error('Failed to update DB', err));
+        Job.findByIdAndUpdate(jobId, { status: 'completed', reportData: report, progress: 100, currentStep: 'Complete' }, { returnDocument: 'after' }).catch(err => console.error('Failed to update DB', err));
         
         job.status = 'complete';
         jobs.set(jobId, job);
@@ -1869,6 +2032,265 @@ AI Viability Score: ${resultState.viabilityScore}/10`;
       }
     }
   }
+
+  // ─── Conversational Orchestration Endpoint ────────────────────────────────
+  app.post('/api/converse/:jobId', async (req, res) => {
+    try {
+    const { jobId } = req.params;
+    const { message } = req.body;
+
+    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    const isMongoConnected = mongoose.connection.readyState === 1;
+
+    // Get existing report
+    let report = reports.get(jobId);
+    if (!report && isMongoConnected) {
+      try {
+        const job = await Job.findById(jobId);
+        if (job?.reportData) {
+          report = job.reportData;
+          reports.set(jobId, report);
+        }
+      } catch {
+        console.warn('[Converse] Report lookup failed in MongoDB, continuing with in-memory fallback.');
+      }
+    }
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found. Run analysis first.' });
+    }
+
+    const { translateUserMessage } = await import('./src/lib/agents/translator');
+
+    // Find or create conversation (MongoDB first, in-memory fallback when offline)
+    let conversation: any = null;
+
+    if (isMongoConnected) {
+      try {
+        const { Conversation } = await import('./src/models/Conversation');
+        conversation = await Conversation.findOne({ jobId });
+        if (!conversation) {
+          conversation = new Conversation({
+            jobId,
+            userId: req.user ? (req.user as any)._id : undefined,
+            molecule: report.molecule,
+            messages: [{
+              role: 'system',
+              content: `Analysis conversation for ${report.molecule}. Phoenix Score: ${report.phoenix_score}/10.`,
+              timestamp: new Date(),
+            }],
+            activeConstraints: [],
+          });
+        }
+      } catch {
+        console.warn('[Converse] Mongo conversation unavailable, falling back to in-memory conversation state.');
+      }
+    }
+
+    if (!conversation) {
+      conversation = conversations.get(jobId);
+      if (!conversation) {
+        conversation = {
+          _id: new mongoose.Types.ObjectId().toString(),
+          jobId,
+          userId: req.user ? (req.user as any)._id?.toString?.() : undefined,
+          molecule: report.molecule,
+          messages: [{
+            role: 'system',
+            content: `Analysis conversation for ${report.molecule}. Phoenix Score: ${report.phoenix_score}/10.`,
+            timestamp: new Date(),
+          }],
+          activeConstraints: [],
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+      }
+    }
+
+    // Add user message
+    conversation.messages.push({
+      role: 'user',
+      content: message.trim(),
+      timestamp: new Date(),
+    });
+
+    // Translate message to structured actions
+    const keys = getGroqKeys('chat');
+    const translation = await translateUserMessage(
+      message.trim(),
+      report.molecule,
+      report,
+      conversation.activeConstraints,
+      keys,
+    );
+
+    // Merge new constraints
+    if (translation.constraints.length > 0) {
+      for (const c of translation.constraints) {
+        const existing = conversation.activeConstraints.findIndex(
+          (ac: any) => ac.type === c.type && ac.field === c.field
+        );
+        if (existing >= 0) {
+          conversation.activeConstraints[existing] = c;
+        } else {
+          conversation.activeConstraints.push(c);
+        }
+      }
+    }
+
+    // Build assistant response with agent actions
+    const agentActions = translation.rerunAgents.map(a => ({
+      agent: a,
+      action: 'rerun',
+      status: 'pending' as const,
+    }));
+
+    conversation.messages.push({
+      role: 'assistant',
+      content: translation.responseText,
+      constraints: translation.constraints,
+      agentActions,
+      timestamp: new Date(),
+    });
+
+    if (isMongoConnected && typeof conversation.save === 'function') {
+      try {
+        await conversation.save();
+      } catch {
+        conversation.updatedAt = new Date();
+        conversations.set(jobId, conversation);
+      }
+    } else {
+      conversation.updatedAt = new Date();
+      conversations.set(jobId, conversation);
+    }
+
+    const conversationId = conversation._id?.toString?.() || conversation._id;
+
+    // If a rerun is needed, kick it off
+    let rerunJobId: string | null = null;
+    if (translation.needsRerun && translation.rerunAgents.length > 0) {
+      // Create a new job for the re-analysis
+      const { runPipeline: runLangGraphPipeline } = await import('./src/lib/agents/workflow');
+
+      const newJobId = new mongoose.Types.ObjectId().toString();
+      if (isMongoConnected) {
+        try {
+          const newJob = await Job.create({
+            _id: newJobId,
+            molecule: report.molecule,
+            prompt: `Conversational re-analysis: ${message.trim()}`,
+            userId: req.user ? (req.user as any)._id : undefined,
+            status: 'processing',
+            currentStep: 'Re-analyzing with constraints...',
+          });
+          rerunJobId = newJob._id.toString();
+        } catch {
+          rerunJobId = newJobId;
+        }
+      } else {
+        rerunJobId = newJobId;
+      }
+
+      // Build steps dynamically — only the agents being re-run + Planner + Synthesis
+      const allStepDefs: Record<string, { label: string }> = {
+        PlannerAgent:   { label: 'Research Planning' },
+        PubChemAgent:   { label: 'PubChem Verify' },
+        ClinicalAgent:  { label: 'Clinical Trials' },
+        PatentAgent:    { label: 'Patent Search' },
+        LiteratureAgent:{ label: 'Literature Search' },
+        RegulatoryAgent:{ label: 'FDA Data' },
+        TargetAgent:    { label: 'Disease Targets' },
+        AnalogAgent:    { label: 'Structural Analogs' },
+        SynthesisAgent: { label: 'Report Synthesis' },
+      };
+      const rerunSet = new Set(translation.rerunAgents);
+      // Always include PlannerAgent first and SynthesisAgent last
+      rerunSet.add('PlannerAgent');
+      rerunSet.add('SynthesisAgent');
+      const orderedAgents = Object.keys(allStepDefs).filter(k => rerunSet.has(k));
+      const rerunSteps = orderedAgents.map((name, i) => ({
+        name,
+        label: allStepDefs[name].label,
+        status: i === 0 ? 'running' : 'waiting',
+        log: i === 0 ? 'Re-planning with constraints...' : 'Pending...',
+      }));
+
+      jobs.set(rerunJobId!, {
+        id: rerunJobId,
+        molecule: report.molecule,
+        prompt: message.trim(),
+        status: 'running',
+        isSteerRerun: true,
+        rerunAgents: translation.rerunAgents,
+        steps: rerunSteps,
+        createdAt: new Date().toISOString(),
+      });
+
+      // Convert active constraints to pipeline format
+      const pipelineConstraints = conversation.activeConstraints.map((c: any) => ({
+        type: c.type,
+        value: c.value,
+        added_at: new Date().toISOString(),
+      }));
+
+      // Run in background
+      runPipeline(rerunJobId!, report.molecule, pipelineConstraints).catch(err => {
+        console.error(`Converse rerun error for ${rerunJobId}:`, err);
+      });
+    }
+
+    res.json({
+      conversationId,
+      response: translation.responseText,
+      constraints: translation.constraints,
+      activeConstraints: conversation.activeConstraints,
+      agentActions,
+      needsRerun: translation.needsRerun,
+      rerunJobId,
+      rerunAgents: translation.rerunAgents || [],
+    });
+    } catch (err: any) {
+      console.error('[Converse] Error:', err.message || err);
+      res.status(500).json({ error: 'Conversation processing failed', detail: err.message });
+    }
+  });
+
+  // Get conversation history for a job
+  app.get('/api/converse/:jobId', async (req, res) => {
+    const { jobId } = req.params;
+    try {
+      let conversation: any = null;
+
+      if (mongoose.connection.readyState === 1) {
+        try {
+          const { Conversation } = await import('./src/models/Conversation');
+          conversation = await Conversation.findOne({ jobId });
+        } catch {
+          console.warn('[Converse] Failed to fetch history from MongoDB, using in-memory conversation state.');
+        }
+      }
+
+      if (!conversation) {
+        conversation = conversations.get(jobId);
+      }
+
+      if (!conversation) {
+        return res.json({ messages: [], activeConstraints: [] });
+      }
+
+      res.json({
+        conversationId: conversation._id?.toString?.() || conversation._id,
+        messages: conversation.messages,
+        activeConstraints: conversation.activeConstraints,
+      });
+    } catch (err) {
+      console.error('Conversation fetch error:', err);
+      res.status(500).json({ error: 'Failed to fetch conversation' });
+    }
+  });
 
   app.post('/api/complete_analysis/:id', (req, res) => {
     const jobId = req.params.id;
@@ -1906,15 +2328,15 @@ AI Viability Score: ${resultState.viabilityScore}/10`;
       };
 
       reports.set(jobId, report);
-        Job.findByIdAndUpdate(jobId, { status: 'completed', reportData: report, progress: 100, currentStep: 'Complete' }, { new: true }).catch(err => console.error('Failed to update DB', err));
-        Job.findByIdAndUpdate(jobId, { status: 'completed', reportData: report, progress: 100, currentStep: 'Complete' }, { new: true }).catch(err => console.error('Failed to update DB', err));
+        Job.findByIdAndUpdate(jobId, { status: 'completed', reportData: report, progress: 100, currentStep: 'Complete' }, { returnDocument: 'after' }).catch(err => console.error('Failed to update DB', err));
       
-      job.steps[6].status = 'done';
-      job.steps[6].log = 'Claims generated.';
-      job.steps[7].status = 'done';
-      job.steps[7].log = 'Counters generated.';
-      job.steps[8].status = 'done';
-      job.steps[8].log = 'Verdict reached.';
+      const setStepDone = (name: string, log: string) => {
+        const s = job.steps.find((st: any) => st.name === name);
+        if (s) { s.status = 'done'; s.log = log; }
+      };
+      setStepDone('TargetAgent', 'Claims generated.');
+      setStepDone('AnalogAgent', 'Counters generated.');
+      setStepDone('SynthesisAgent', 'Verdict reached.');
       job.status = 'complete';
       delete job.intermediate_data;
       jobs.set(jobId, job);

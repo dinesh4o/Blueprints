@@ -11,6 +11,7 @@ const SearchPage = lazy(() => import('./pages/SearchPage'));
 const ProgressPage = lazy(() => import('./pages/ProgressPage'));
 const ReportPage = lazy(() => import('./pages/ReportPage'));
 const PortfolioPage = lazy(() => import('./pages/PortfolioPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const RepurposingPage = lazy(() => import('./pages/RepurposingPage'));
 const CommunityPage = lazy(() => import('./pages/CommunityPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
@@ -18,6 +19,9 @@ const SignupPage = lazy(() => import('./pages/SignupPage').then(m => ({ default:
 const ProfilePage = lazy(() => import('./pages/ProfilePage').then(m => ({ default: m.ProfilePage })));
 const PricingPage = lazy(() => import('./pages/PricingPage').then(m => ({ default: m.PricingPage })));
 const SharedReportPage = lazy(() => import('./pages/SharedReportPage'));
+const PresentationDeckPage = lazy(() => import('./pages/PresentationDeckPage').then(m => ({ default: m.Presentation })));
+const AdminPage = lazy(() => import('./pages/AdminPage'));
+const RAGChatPage = lazy(() => import('./pages/RAGChatPage'));
 
 // A simple fallback for Suspense
 const PageLoader = () => (
@@ -49,6 +53,7 @@ export default function App() {
                   {/* Landing page is public — auth check happens on "Start Analysis" */}
                   <Route path="/" element={<LandingPage />} />
                   <Route path="/shared/:token" element={<SharedReportPage />} />
+                  <Route path="/pitch" element={<PresentationDeckPage />} />
 
                   {/* Protected routes */}
                   <Route
@@ -92,6 +97,14 @@ export default function App() {
                     }
                   />
                   <Route
+                    path="/dashboard"
+                    element={
+                      <ProtectedRoute>
+                        <DashboardPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
                     path="/profile"
                     element={
                       <ProtectedRoute>
@@ -112,6 +125,22 @@ export default function App() {
                     element={
                       <ProtectedRoute>
                         <CommunityPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin"
+                    element={
+                      <ProtectedRoute>
+                        <AdminPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/rag"
+                    element={
+                      <ProtectedRoute>
+                        <RAGChatPage />
                       </ProtectedRoute>
                     }
                   />

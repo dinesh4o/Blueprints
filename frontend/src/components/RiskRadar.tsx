@@ -19,6 +19,7 @@ interface RiskRadarProps {
   ipScore?: number;
   evidenceScore?: number;
   noveltyScore?: number;
+  useColor?: boolean;
 }
 
 export function RiskRadar({
@@ -29,6 +30,7 @@ export function RiskRadar({
   ipScore = 0,
   evidenceScore = 0,
   noveltyScore = 0,
+  useColor = true,
 }: RiskRadarProps) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
@@ -114,7 +116,9 @@ export function RiskRadar({
       <div className="grid grid-cols-3 gap-2 mt-4">
         {dimensions.map((d, i) => {
           const pct = (d.score / d.fullMark) * 100;
-          const color = pct >= 70 ? 'text-emerald-400 bg-emerald-400' : pct >= 40 ? 'text-amber-400 bg-amber-400' : 'text-rose-400 bg-rose-400';
+          const color = useColor
+            ? (pct >= 70 ? 'text-emerald-400 bg-emerald-400' : pct >= 40 ? 'text-amber-400 bg-amber-400' : 'text-rose-400 bg-rose-400')
+            : 'text-zinc-400 bg-zinc-500';
 
           return (
             <motion.div

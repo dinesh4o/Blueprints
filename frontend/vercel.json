@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/rag-api/(.*)",
+      "destination": "https://raghost-pcgw.onrender.com/api/v1/$1"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "https://blueprints-backend-yc9s.onrender.com/api/$1"
     },

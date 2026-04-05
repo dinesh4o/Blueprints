@@ -7,6 +7,7 @@ interface User {
   avatar?: string;
   authProvider: 'local' | 'google';
   hasPassword?: boolean;
+  role?: 'user' | 'admin';
   plan?: 'free' | 'researcher' | 'organization';
 }
 

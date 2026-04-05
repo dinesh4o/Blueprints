@@ -1,22 +1,32 @@
+# Dependencies
 node_modules/
+package-lock.json
+
+# Build outputs
 build/
 dist/
 coverage/
-.DS_Store
-*.log
+
+# Environment
 .env*
 !.env.example
 .venv/
+
+# Python
 __pycache__/
 *.pyc
-kill-ports.md
-ref.txt
 
-# Temporary files
-*.patch
-*.cjs
-*.txt
-*.ps1
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Temporary / scratch files
 temp_*
 backup_*
-
+kill-ports.md
+ref.txt
+*.patch
