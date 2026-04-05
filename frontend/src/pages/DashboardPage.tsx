@@ -162,11 +162,10 @@ function StatCard({ label, value, trend, trendLabel, trendPositive = true, icon:
 // ════════════════════════════════════════════════════════════════════
 //  USER DASHBOARD
 // ════════════════════════════════════════════════════════════════════
-function UserDashboard({ stats, activity, loading, section }: {
+function UserDashboard({ stats, activity, loading }: {
   stats: UserStats | null;
   activity: RecentActivity | null;
   loading: boolean;
-  section: 'overview' | 'analyses' | 'opportunities' | 'activity';
 }) {
   const navigate = useNavigate();
   const [tablePage, setTablePage] = useState(0);
@@ -213,14 +212,15 @@ function UserDashboard({ stats, activity, loading, section }: {
 
   return (
     <div className="space-y-6">
-      {/* ── Overview = stat cards + trend chart ── */}
-      {(section === 'overview') && (<>
+      {/* ── Stat Cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard accent="analyses" icon={FlaskConical} label="Total Analyses" value={stats.totalAnalyses.toLocaleString()} trend={`${stats.completionRate}%`} trendLabel="success rate" trendPositive={stats.completionRate >= 70} />
         <StatCard accent="score" icon={Target} label="Avg Phoenix Score" value={stats.avgPhoenixScore > 0 ? stats.avgPhoenixScore.toFixed(1) : '—'} trend={stats.avgPhoenixScore >= 7 ? '+Strong' : stats.avgPhoenixScore >= 5 ? 'Moderate' : undefined} trendLabel="confidence" trendPositive={stats.avgPhoenixScore >= 5} />
         <StatCard accent="molecule" icon={Atom} label="Top Molecule" value={stats.topMolecule?.name ?? '—'} trend={stats.topMolecule ? `${stats.topMolecule.score.toFixed(1)}/10` : undefined} trendLabel="Phoenix Score" trendPositive={(stats.topMolecule?.score ?? 0) >= 7} />
         <StatCard accent="shared" icon={Share2} label="Shared Reports" value={stats.sharedReports.toLocaleString()} trend={stats.sharedReports > 0 ? `${stats.sharedReports}` : undefined} trendLabel="shared" trendPositive />
       </div>
+
+      {/* ── Area Chart ── */}
       <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -231,33 +231,68 @@ function UserDashboard({ stats, activity, loading, section }: {
             <div className="w-2 h-2 rounded-full bg-cyan-400" /> Analyses
           </div>
         </div>
-          {stats.weeklyTrend.length > 0 ? (
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={stats.weeklyTrend}>
-                  <defs>
-                    <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.2} />
-                      <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-                  <XAxis dataKey="week" tick={{ fontSize: 11, fill: '#71717a' }} tickFormatter={v => new Date(v).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} axisLine={{ stroke: '#27272a' }} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: '#71717a' }} allowDecimals={false} width={32} axisLine={false} tickLine={false} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Area type="monotone" dataKey="count" stroke="#06b6d4" strokeWidth={2} fill="url(#trendFill)" name="Analyses" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="h-64 flex items-center justify-center text-zinc-600">No data yet — run an analysis to get started</div>
-          )}
-        </div>
-      </>)}
+        {stats.weeklyTrend.length > 0 ? (
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={stats.weeklyTrend}>
+                <defs>
+                  <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.2} />
+                    <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                <XAxis dataKey="week" tick={{ fontSize: 11, fill: '#71717a' }} tickFormatter={v => new Date(v).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} axisLine={{ stroke: '#27272a' }} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: '#71717a' }} allowDecimals={false} width={32} axisLine={false} tickLine={false} />
+                <Tooltip content={<CustomTooltip />} />
+                <Area type="monotone" dataKey="count" stroke="#06b6d4" strokeWidth={2} fill="url(#trendFill)" name="Analyses" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="h-64 flex items-center justify-center text-zinc-600">No data yet — run an analysis to get started</div>
+        )}
+      </div>
 
-      {/* ── Analyses section ── */}
-      {section === 'analyses' && (
-        <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl overflow-hidden">
+      {/* ── Pie Charts Row ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-5">
+          <p className="font-semibold text-zinc-100 mb-1">Analysis Status</p>
+          <p className="text-xs text-zinc-500 mb-4">{statusTotal} Total Analyses</p>
+          {statusData.length > 0 ? (
+            <div className="flex items-center gap-8">
+              <div className="w-40 h-40 flex-shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart><Pie data={statusData} cx="50%" cy="50%" innerRadius={40} outerRadius={65} dataKey="value" strokeWidth={2} stroke="#09090b">{statusData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}</Pie><Tooltip content={<CustomTooltip />} /></PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex flex-col gap-3 flex-1">
+                {statusData.map((d, i) => { const pct = statusTotal > 0 ? ((d.value / statusTotal) * 100).toFixed(1) : '0'; return (<div key={d.name} className="flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm" style={{ backgroundColor: PIE_COLORS[i] }} /><span className="text-sm text-zinc-200">{d.name}</span></div><span className="text-sm font-medium tabular-nums text-zinc-400">{pct}%</span></div>); })}
+              </div>
+            </div>
+          ) : (<div className="h-40 flex items-center justify-center text-zinc-600 text-sm">No analyses yet</div>)}
+        </div>
+        <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-5">
+          <p className="font-semibold text-zinc-100 mb-1">Top Opportunities</p>
+          <p className="text-xs text-zinc-500 mb-4">By repurposing score</p>
+          {categoryData.length > 0 ? (
+            <div className="flex items-center gap-8">
+              <div className="w-40 h-40 flex-shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart><Pie data={categoryData} cx="50%" cy="50%" innerRadius={40} outerRadius={65} dataKey="value" strokeWidth={2} stroke="#09090b">{categoryData.map((_, i) => <Cell key={i} fill={CATEGORY_COLORS[i % CATEGORY_COLORS.length]} />)}</Pie><Tooltip content={<CustomTooltip />} /></PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex flex-col gap-3 flex-1">
+                {categoryData.map((d, i) => (<div key={d.name} className="flex items-center justify-between"><div className="flex items-center gap-2 min-w-0"><div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: CATEGORY_COLORS[i] }} /><div className="min-w-0"><span className="text-sm text-zinc-200 truncate block">{d.name}</span><span className="text-xs text-zinc-500">{d.molecule}</span></div></div><span className="text-sm font-semibold tabular-nums ml-2 text-zinc-100">{d.value.toFixed(1)}</span></div>))}
+              </div>
+            </div>
+          ) : (<div className="h-40 flex items-center justify-center text-zinc-600 text-sm">Run analyses to discover opportunities</div>)}
+        </div>
+      </div>
+
+      {/* ── Bottom Row: Table + Activity ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 bg-zinc-900/60 border border-zinc-800/60 rounded-xl overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800/60">
             <div>
               <p className="font-semibold text-zinc-100">Recent Analyses</p>
@@ -305,53 +340,11 @@ function UserDashboard({ stats, activity, loading, section }: {
             <div className="py-12 text-center text-zinc-600 text-sm">No analyses yet. <button onClick={() => navigate('/search')} className="text-cyan-400 hover:underline">Start your first analysis →</button></div>
           )}
         </div>
-      )}
-
-      {/* ── Opportunities section ── */}
-      {section === 'opportunities' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-5">
-            <p className="font-semibold text-zinc-100 mb-1">Analysis Status</p>
-            <p className="text-xs text-zinc-500 mb-4">{statusTotal} Total Analyses</p>
-            {statusData.length > 0 ? (
-              <div className="flex items-center gap-8">
-                <div className="w-40 h-40 flex-shrink-0">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart><Pie data={statusData} cx="50%" cy="50%" innerRadius={40} outerRadius={65} dataKey="value" strokeWidth={2} stroke="#09090b">{statusData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}</Pie><Tooltip content={<CustomTooltip />} /></PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="flex flex-col gap-3 flex-1">
-                  {statusData.map((d, i) => { const pct = statusTotal > 0 ? ((d.value / statusTotal) * 100).toFixed(1) : '0'; return (<div key={d.name} className="flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm" style={{ backgroundColor: PIE_COLORS[i] }} /><span className="text-sm text-zinc-200">{d.name}</span></div><span className="text-sm font-medium tabular-nums text-zinc-400">{pct}%</span></div>); })}
-                </div>
-              </div>
-            ) : (<div className="h-40 flex items-center justify-center text-zinc-600 text-sm">No analyses yet</div>)}
-          </div>
-          <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-5">
-            <p className="font-semibold text-zinc-100 mb-1">Top Opportunities</p>
-            <p className="text-xs text-zinc-500 mb-4">By repurposing score</p>
-            {categoryData.length > 0 ? (
-              <div className="flex items-center gap-8">
-                <div className="w-40 h-40 flex-shrink-0">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart><Pie data={categoryData} cx="50%" cy="50%" innerRadius={40} outerRadius={65} dataKey="value" strokeWidth={2} stroke="#09090b">{categoryData.map((_, i) => <Cell key={i} fill={CATEGORY_COLORS[i % CATEGORY_COLORS.length]} />)}</Pie><Tooltip content={<CustomTooltip />} /></PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="flex flex-col gap-3 flex-1">
-                  {categoryData.map((d, i) => (<div key={d.name} className="flex items-center justify-between"><div className="flex items-center gap-2 min-w-0"><div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: CATEGORY_COLORS[i] }} /><div className="min-w-0"><span className="text-sm text-zinc-200 truncate block">{d.name}</span><span className="text-xs text-zinc-500">{d.molecule}</span></div></div><span className="text-sm font-semibold tabular-nums ml-2 text-zinc-100">{d.value.toFixed(1)}</span></div>))}
-                </div>
-              </div>
-            ) : (<div className="h-40 flex items-center justify-center text-zinc-600 text-sm">Run analyses to discover opportunities</div>)}
-          </div>
-        </div>
-      )}
-
-      {/* ── Activity section ── */}
-      {section === 'activity' && (
         <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl overflow-hidden">
           <div className="px-5 py-4 border-b border-zinc-800/60">
             <p className="font-semibold text-zinc-100">Recent Activity</p>
           </div>
-          <ScrollArea className="h-[600px]">
+          <ScrollArea className="h-[400px]">
             <div className="p-4 space-y-0">
               {activityItems.length > 0 ? activityItems.map((item, i) => (
                 <div key={i}>
@@ -369,7 +362,7 @@ function UserDashboard({ stats, activity, loading, section }: {
             </div>
           </ScrollArea>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -599,7 +592,7 @@ export default function DashboardPage() {
   const isAdmin = user?.role === 'admin';
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [section, setSection] = useState<'overview' | 'analyses' | 'opportunities' | 'activity' | 'admin'>('overview');
+  const [section, setSection] = useState<'overview' | 'admin'>('overview');
   const [userStats, setUserStats] = useState<UserStats | null>(null);
   const [activity, setActivity] = useState<RecentActivity | null>(null);
   const [adminStats, setAdminStats] = useState<AdminStats | null>(null);
@@ -629,12 +622,9 @@ export default function DashboardPage() {
       .finally(() => setLoadingAdmin(false));
   }, [section, isAdmin]);
 
-  type Section = 'overview' | 'analyses' | 'opportunities' | 'activity' | 'admin';
+  type Section = 'overview' | 'admin';
   const NAV: { id: Section; label: string; icon: any }[] = [
-    { id: 'overview',      label: 'Overview',      icon: BarChart3    },
-    { id: 'analyses',      label: 'Analyses',      icon: FlaskConical },
-    { id: 'opportunities', label: 'Opportunities', icon: Target       },
-    { id: 'activity',      label: 'Activity',      icon: Activity     },
+    { id: 'overview', label: 'Overview', icon: BarChart3 },
     ...(isAdmin ? [{ id: 'admin' as Section, label: 'Admin Panel', icon: Shield }] : []),
   ];
 
@@ -691,11 +681,11 @@ export default function DashboardPage() {
               <p className="text-[10px] font-medium text-zinc-600 uppercase tracking-wider px-3 mb-2">Navigate</p>
             </div>
             {[
-              { label: 'New Analysis', icon: Search,       path: '/search'    },
-              { label: 'Portfolio',    icon: FileText,     path: '/portfolio'  },
-              { label: 'Research RAG', icon: BookOpen,     path: '/rag'        },
-              { label: 'Community',   icon: MessageSquare, path: '/community' },
-              { label: 'Pricing',     icon: Crown,        path: '/pricing'    },
+              { label: 'New Analysis', icon: Search,       path: '/search'        },
+              { label: 'Portfolio',    icon: FileText,     path: '/portfolio'      },
+              { label: 'Research RAG', icon: BookOpen,     path: '/rag'            },
+              { label: 'Community',   icon: MessageSquare, path: '/community'     },
+              { label: 'Pricing',     icon: Crown,        path: '/pricing'        },
             ].map(item => (
               <button
                 key={item.path}
@@ -740,10 +730,7 @@ export default function DashboardPage() {
               <Menu className="w-4 h-4" />
             </button>
             <h1 className="text-sm font-semibold text-zinc-100 capitalize">
-              {section === 'overview' ? 'Overview' :
-               section === 'analyses' ? 'Analyses' :
-               section === 'opportunities' ? 'Top Opportunities' :
-               section === 'activity' ? 'Recent Activity' : 'Admin Panel'}
+              {section === 'admin' ? 'Admin Panel' : 'Overview'}
             </h1>
             <div className="ml-auto">
               <Button size="sm" onClick={() => navigate('/search')} className="gap-1.5 bg-cyan-600 hover:bg-cyan-700 text-white border-0 h-8 text-xs">
@@ -763,7 +750,6 @@ export default function DashboardPage() {
                     stats={userStats}
                     activity={activity}
                     loading={loadingUser}
-                    section={section as 'overview' | 'analyses' | 'opportunities' | 'activity'}
                   />
                 )}
               </motion.div>

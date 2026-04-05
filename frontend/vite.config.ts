@@ -25,6 +25,12 @@ export default defineConfig(({mode}) => {
         allow: ['..'],
       },
       proxy: {
+        '/rag-api': {
+          target: 'https://raghost-pcgw.onrender.com',
+          changeOrigin: true,
+          rewrite: (path: string) => path.replace(/^\/rag-api/, '/api/v1'),
+          secure: true
+        },
         '/api': {
           target: 'http://localhost:3000',
           changeOrigin: true

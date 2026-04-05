@@ -23,6 +23,7 @@ import authRoutes from './src/routes/auth';
 import communityRoutes from './src/routes/community';
 import dashboardRoutes from './src/routes/dashboard';
 import adminRoutes from './src/routes/admin';
+
 import { Job } from './src/models/Job';
 
 import { generateReportLaTeX } from './src/lib/pdfGenerator';
@@ -382,6 +383,7 @@ async function startServer() {
   app.use('/api/community', communityRoutes);
   app.use('/api/dashboard', dashboardRoutes);
   app.use('/api/admin', adminRoutes);
+
 
   // In-memory store for jobs and reports (simulating MongoDB)
   const jobs = new Map<string, any>();

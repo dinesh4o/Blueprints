@@ -1774,6 +1774,7 @@ export default function ReportPage() {
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [shareState, setShareState] = useState<'idle' | 'loading' | 'copied'>('idle');
+
   const [currency, setCurrency] = useState<'USD' | 'INR'>('INR');
   const [structureMode, setStructureMode] = useState<'2d' | '3d'>('3d');
   const [compareMolecule, setCompareMolecule] = useState<'A' | 'B'>('A');
@@ -2226,6 +2227,8 @@ export default function ReportPage() {
                     : shareState === 'copied' ? <Check size={16} />
                     : <Share2 size={16} />}
                 </button>
+
+
               </div>
               <div className="flex items-center gap-2 mt-1 text-xs font-medium text-zinc-500">
                 <span onClick={() => navigate('/search')} className="hover:text-zinc-300 cursor-pointer transition-colors">Search</span>

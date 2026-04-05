@@ -2,29 +2,29 @@
 import { useNavigate } from 'react-router-dom';
 import {
   Upload, X, FileText, Send, Loader2, Sparkles,
-  User, ArrowLeft, Paperclip, Trash2,
+  User, ArrowLeft, Paperclip, Trash2, CheckCircle2, AlertCircle,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
+import * as pdfjsLib from 'pdfjs-dist';
 
-const N8N_WEBHOOK = 'https://testphaseluvara.app.n8n.cloud/webhook/b69ab6d2-ccaf-4ab9-9a35-60393b98f745/chat';
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+
+const RAG_API_URL = '/rag-api';
+const RAG_API_KEY = import.meta.env.VITE_RAG_API_KEY || 'rh_your_key_here';
 
 interface Message { role: 'user' | 'assistant'; content: string; }
-interface UploadedFile { name: string; size: number; base64: string; }
+interface UploadedDoc { name: string; size: number; id?: string; status: 'uploading' | 'ready' | 'error'; error?: string; }
 
 function fmt(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1048576).toFixed(1)} MB`;
 }
-function toBase64(file: File): Promise<string> {
-  return new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = () => res((r.result as string).split(',')[1]);
-    r.onerror = rej;
-    r.readAsDataURL(file);
-  });
+
+function genSessionId() {
+  return `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 const STARTERS = [
@@ -37,13 +37,13 @@ const STARTERS = [
 
 export default function RAGChatPage() {
   const navigate = useNavigate();
-  const [files, setFiles] = useState<UploadedFile[]>([]);
+  const [docs, setDocs] = useState<UploadedDoc[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState('');
+  const [sessionId] = useState(genSessionId);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -60,57 +60,121 @@ export default function RAGChatPage() {
     el.style.height = `${Math.min(el.scrollHeight, 144)}px`;
   }, [input]);
 
+  // Upload PDF via /api/v1/documents/upload — extract text client-side to avoid server pdf-parse issues
+  const uploadFile = useCallback(async (file: File) => {
+    const docEntry: UploadedDoc = { name: file.name, size: file.size, status: 'uploading' };
+    setDocs(prev => {
+      if (prev.some(d => d.name === file.name)) return prev;
+      return [...prev, docEntry];
+    });
+
+    try {
+      // Extract text from PDF client-side using pdf.js
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const pages: string[] = [];
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        pages.push(content.items.map((item: any) => item.str).join(' '));
+      }
+      const text = pages.join('\n\n');
+
+      if (!text.trim()) {
+        throw new Error('No extractable text found — this PDF may be scanned/image-only.');
+      }
+
+      // Upload as .txt so the server doesn't need to parse the PDF
+      const txtBlob = new Blob([text], { type: 'text/plain' });
+      const txtName = file.name.replace(/\.pdf$/i, '.txt');
+
+      const form = new FormData();
+      form.append('document', txtBlob, txtName);
+
+      const res = await fetch(`${RAG_API_URL}/documents/upload`, {
+        method: 'POST',
+        headers: { 'X-API-Key': RAG_API_KEY },
+        body: form,
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || errData.message || `Upload failed (${res.status})`);
+      }
+
+      const data = await res.json();
+
+      setDocs(prev => prev.map(d =>
+        d.name === file.name ? { ...d, status: 'ready' as const, id: data.documentId || data.id || data.document?.id } : d
+      ));
+
+      return true;
+    } catch (err: any) {
+      setDocs(prev => prev.map(d =>
+        d.name === file.name ? { ...d, status: 'error' as const, error: err?.message || 'Upload failed' } : d
+      ));
+      return false;
+    }
+  }, []);
+
   const processFiles = useCallback(async (raw: FileList | File[]) => {
     const pdfs = Array.from(raw).filter(f => f.type === 'application/pdf');
     if (!pdfs.length) { setError('Only PDF files are supported.'); return; }
     setError('');
-    setUploading(true);
-    try {
-      const encoded: UploadedFile[] = await Promise.all(
-        pdfs.map(async f => ({ name: f.name, size: f.size, base64: await toBase64(f) }))
-      );
-      setFiles(prev => {
-        const seen = new Set(prev.map(p => p.name));
-        return [...prev, ...encoded.filter(e => !seen.has(e.name))];
-      });
-      if (!messages.length) {
-        setMessages([{ role: 'assistant', content: `Ready. I've loaded **${pdfs.map(f => f.name).join(', ')}**. What would you like to know?` }]);
-      }
-    } catch { setError('Failed to process file. Please try again.'); }
-    finally { setUploading(false); }
-  }, [messages.length]);
+
+    const results = await Promise.all(pdfs.map(f => uploadFile(f)));
+    const successCount = results.filter(Boolean).length;
+
+    if (successCount > 0 && !messages.length) {
+      setMessages([{
+        role: 'assistant',
+        content: `Uploaded **${successCount} PDF${successCount > 1 ? 's' : ''}** successfully. Ask me anything about ${successCount === 1 ? 'this document' : 'these documents'}.`,
+      }]);
+    }
+  }, [uploadFile, messages.length]);
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false); processFiles(e.dataTransfer.files);
   }, [processFiles]);
 
-  const removeFile = (name: string) => {
-    setFiles(prev => prev.filter(f => f.name !== name));
-    if (files.length === 1) setMessages([]);
+  const removeDoc = (name: string) => {
+    setDocs(prev => prev.filter(d => d.name !== name));
+    if (docs.length === 1) setMessages([]);
   };
 
+  // Query via /api/v1/query
   const send = async (e: React.FormEvent | React.KeyboardEvent, quick?: string) => {
     e.preventDefault();
     const text = (quick || input).trim();
     if (!text || loading) return;
-    if (!files.length) { setError('Upload a PDF first.'); return; }
+    const readyDocs = docs.filter(d => d.status === 'ready');
+    if (!readyDocs.length) { setError('Upload a PDF first.'); return; }
     setError('');
     setInput('');
     setMessages(prev => [...prev, { role: 'user', content: text }]);
     setLoading(true);
+
     try {
-      const res = await fetch(N8N_WEBHOOK, {
+      const res = await fetch(`${RAG_API_URL}/query`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': RAG_API_KEY,
+        },
         body: JSON.stringify({
           message: text,
-          files: files.map(f => ({ name: f.name, type: 'application/pdf', data: f.base64 })),
-          history: messages.slice(-10),
+          sessionId,
         }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || errData.message || `Query failed (${res.status})`);
+      }
+
       const ct = res.headers.get('content-type') || '';
       if (ct.includes('text/event-stream')) {
+        // SSE streaming
         setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
         const reader = res.body!.getReader();
         const dec = new TextDecoder();
@@ -126,14 +190,19 @@ export default function RAGChatPage() {
             if (d === '[DONE]') break;
             try {
               const p = JSON.parse(d);
-              const token = p.text || p.content || p.token || '';
-              if (token) { reply += token; setMessages(prev => { const m = [...prev]; m[m.length-1] = { role:'assistant', content: reply }; return m; }); }
-            } catch { /* skip */ }
+              const token = p.text || p.content || p.token || p.delta?.content || '';
+              if (token) { reply += token; setMessages(prev => { const m = [...prev]; m[m.length - 1] = { role: 'assistant', content: reply }; return m; }); }
+            } catch { /* skip non-JSON lines */ }
           }
         }
+        if (!reply) {
+          setMessages(prev => { const m = [...prev]; m[m.length - 1] = { role: 'assistant', content: 'No response received.' }; return m; });
+        }
       } else {
+        // JSON response
         const data = await res.json();
-        const reply = data.output || data.text || data.message || data.response || (Array.isArray(data) && data[0]?.text) || JSON.stringify(data);
+        const reply = data.response || data.answer || data.output || data.text || data.message ||
+          (Array.isArray(data) && data[0]?.text) || JSON.stringify(data);
         setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
       }
     } catch (err: any) {
@@ -145,6 +214,7 @@ export default function RAGChatPage() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(e); }
   };
 
+  const readyCount = docs.filter(d => d.status === 'ready').length;
   const empty = messages.length === 0;
 
   return (
@@ -164,9 +234,14 @@ export default function RAGChatPage() {
           <span className="text-xs text-zinc-500">PDF Intelligence</span>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          {files.length > 0 && (
+          {readyCount > 0 && (
             <span className="text-[11px] text-zinc-500 border border-zinc-800 rounded-full px-2.5 py-1">
-              {files.length} PDF{files.length > 1 ? 's' : ''}
+              {readyCount} PDF{readyCount > 1 ? 's' : ''} ready
+            </span>
+          )}
+          {docs.some(d => d.status === 'uploading') && (
+            <span className="text-[11px] text-amber-400/80 border border-amber-500/20 rounded-full px-2.5 py-1 flex items-center gap-1">
+              <Loader2 size={10} className="animate-spin" /> Uploading
             </span>
           )}
           <button
@@ -191,32 +266,37 @@ export default function RAGChatPage() {
               dragOver ? 'border-zinc-600 bg-zinc-900/60 text-zinc-300' : 'border-zinc-800 text-zinc-600 hover:border-zinc-700 hover:text-zinc-500'
             )}
           >
-            {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-            <span className="leading-snug">{uploading ? 'Processing' : 'Drop PDF or click'}</span>
+            {docs.some(d => d.status === 'uploading') ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+            <span className="leading-snug">{docs.some(d => d.status === 'uploading') ? 'Uploading…' : 'Drop PDF or click'}</span>
           </div>
           <div className="flex-1 overflow-y-auto flex flex-col gap-1.5 min-h-0">
             <AnimatePresence>
-              {files.map(f => (
+              {docs.map(d => (
                 <motion.div
-                  key={f.name}
+                  key={d.name}
                   initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }}
                   className="group flex items-center gap-2 rounded-lg border border-zinc-800/60 bg-zinc-900/40 px-3 py-2"
                 >
-                  <FileText size={12} className="text-zinc-500 shrink-0" />
+                  {d.status === 'uploading' ? <Loader2 size={12} className="text-amber-400 animate-spin shrink-0" />
+                    : d.status === 'error' ? <AlertCircle size={12} className="text-rose-400 shrink-0" />
+                    : <CheckCircle2 size={12} className="text-emerald-400 shrink-0" />}
                   <div className="flex-1 min-w-0">
-                    <p className="text-[11px] text-zinc-300 truncate">{f.name}</p>
-                    <p className="text-[10px] text-zinc-700">{fmt(f.size)}</p>
+                    <p className="text-[11px] text-zinc-300 truncate">{d.name}</p>
+                    <p className="text-[10px] text-zinc-700">
+                      {fmt(d.size)}
+                      {d.status === 'error' && <span className="text-rose-400 ml-1">— {d.error}</span>}
+                    </p>
                   </div>
-                  <button onClick={() => removeFile(f.name)} className="opacity-0 group-hover:opacity-100 text-zinc-700 hover:text-rose-400 transition-all">
+                  <button onClick={() => removeDoc(d.name)} className="opacity-0 group-hover:opacity-100 text-zinc-700 hover:text-rose-400 transition-all">
                     <X size={11} />
                   </button>
                 </motion.div>
               ))}
             </AnimatePresence>
-            {files.length === 0 && <p className="text-[11px] text-zinc-800 text-center mt-3">No files loaded</p>}
+            {docs.length === 0 && <p className="text-[11px] text-zinc-800 text-center mt-3">No files loaded</p>}
           </div>
-          {files.length > 0 && (
-            <button onClick={() => { setFiles([]); setMessages([]); }} className="flex items-center justify-center gap-1 text-[11px] text-zinc-700 hover:text-rose-500 transition-colors">
+          {docs.length > 0 && (
+            <button onClick={() => { setDocs([]); setMessages([]); }} className="flex items-center justify-center gap-1 text-[11px] text-zinc-700 hover:text-rose-500 transition-colors">
               <Trash2 size={10} /> Clear all
             </button>
           )}
@@ -249,8 +329,8 @@ export default function RAGChatPage() {
                       dragOver ? 'border-zinc-600 text-zinc-300 bg-zinc-900/50' : 'border-zinc-800 text-zinc-600 hover:border-zinc-700'
                     )}
                   >
-                    {uploading ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
-                    <span>{uploading ? 'Processing' : 'Tap to upload PDF'}</span>
+                    {docs.some(d => d.status === 'uploading') ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
+                    <span>{docs.some(d => d.status === 'uploading') ? 'Uploading…' : 'Tap to upload PDF'}</span>
                   </div>
                 </motion.div>
                 <motion.div
@@ -262,7 +342,7 @@ export default function RAGChatPage() {
                     <button
                       key={i}
                       onClick={e => {
-                        if (!files.length) { setError('Upload a PDF first.'); return; }
+                        if (!readyCount) { setError('Upload a PDF first.'); return; }
                         send(e as any, q);
                       }}
                       className="text-left text-sm text-zinc-500 hover:text-zinc-200 border border-zinc-800/70 hover:border-zinc-700 rounded-lg px-4 py-2.5 transition-all bg-zinc-900/30 hover:bg-zinc-900/60"
@@ -329,13 +409,15 @@ export default function RAGChatPage() {
           </AnimatePresence>
 
           <div className="shrink-0 px-6 md:px-12 pb-6 pt-3 border-t border-zinc-800/60">
-            {files.length > 0 && (
+            {docs.length > 0 && (
               <div className="lg:hidden flex gap-1.5 mb-2 overflow-x-auto pb-1">
-                {files.map(f => (
-                  <div key={f.name} className="shrink-0 flex items-center gap-1 text-[11px] bg-zinc-900/60 border border-zinc-800 rounded-full px-2.5 py-1 text-zinc-500">
-                    <FileText size={9} className="text-zinc-600" />
-                    <span className="max-w-[90px] truncate">{f.name}</span>
-                    <button onClick={() => removeFile(f.name)} className="text-zinc-700 hover:text-rose-400 ml-0.5"><X size={9} /></button>
+                {docs.map(d => (
+                  <div key={d.name} className="shrink-0 flex items-center gap-1 text-[11px] bg-zinc-900/60 border border-zinc-800 rounded-full px-2.5 py-1 text-zinc-500">
+                    {d.status === 'uploading' ? <Loader2 size={9} className="text-amber-400 animate-spin" />
+                      : d.status === 'error' ? <AlertCircle size={9} className="text-rose-400" />
+                      : <CheckCircle2 size={9} className="text-emerald-400" />}
+                    <span className="max-w-[90px] truncate">{d.name}</span>
+                    <button onClick={() => removeDoc(d.name)} className="text-zinc-700 hover:text-rose-400 ml-0.5"><X size={9} /></button>
                   </div>
                 ))}
               </div>
@@ -356,16 +438,16 @@ export default function RAGChatPage() {
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={onKey}
                   disabled={loading}
-                  placeholder={files.length ? 'Ask anything about your document' : 'Upload a PDF to begin'}
+                  placeholder={readyCount ? 'Ask anything about your document' : 'Upload a PDF to begin'}
                   className="w-full resize-none bg-zinc-900/80 border border-zinc-800 focus:border-zinc-700 focus:ring-0 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-700 outline-none transition-colors disabled:opacity-40 max-h-36 leading-relaxed"
                 />
               </div>
               <button
                 type="submit"
-                disabled={loading || !input.trim() || !files.length}
+                disabled={loading || !input.trim() || !readyCount}
                 className={clsx(
                   'shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200',
-                  !loading && input.trim() && files.length
+                  !loading && input.trim() && readyCount
                     ? 'bg-zinc-100 hover:bg-white text-zinc-900'
                     : 'bg-zinc-900 border border-zinc-800 text-zinc-700 cursor-not-allowed'
                 )}
