@@ -88,3 +88,9 @@ npm run dev
 ---
 *Note: Standalone Python scripts found in this project folder (`agent_workflow.py`, `rag_server.py`, `script_fixes.py`) are legacy prototypes or supplementary microservices. Setting up an active python virtual env (`.venv`) and installing dependencies via `pip install -r backend/requirements.txt` allows independent testing of the RAG pipelines.*
 
+Contributor :
+Dinesh R
+Aniruth R
+Sailesh K
+Pavan Kumar V H
+Shrinidhi R
